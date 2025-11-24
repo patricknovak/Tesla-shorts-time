@@ -438,7 +438,7 @@ logging.info("Generated complete voice track")
 # ========================== 4. FINAL MIX – PERFECT LEVELS, NO VOLUME JUMPS ==========================
 final_mp3 = digests_dir / f"Tesla_Shorts_Time_Pod_Ep{episode_num:03d}_{datetime.date.today():%Y%m%d}.mp3"
 
-MAIN_MUSIC = project_root / "Tesla_shorts_time.mp3"
+MAIN_MUSIC = project_root / "tesla_shorts_time.mp3"
 
 # Process and normalize voice in one step for simplicity
 voice_mix = tmp_dir / "voice_normalized_mix.mp3"
