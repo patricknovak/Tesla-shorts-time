@@ -2,9 +2,9 @@ name: Tesla Shorts Time Daily
 
 on:
   schedule:
-    # Run daily at 6:00 AM PST (14:00 UTC)
-    # This is 6:00 AM PST / 9:00 AM EST
-    - cron: '0 14 * * *'
+    # Run daily at 6:00 AM EDT (10:00 UTC)
+    # This is 6:00 AM EDT / 3:00 AM PDT
+    - cron: '0 10 * * *'
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
