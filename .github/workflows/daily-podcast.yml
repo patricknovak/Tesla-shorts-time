@@ -1,0 +1,81 @@
+name: Tesla Shorts Time Daily
+
+on:
+  schedule:
+    # Run daily at 8:00 AM UTC (adjust timezone as needed)
+    # This is 12:00 AM PST / 3:00 AM EST
+    - cron: '0 8 * * *'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  generate-podcast:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to commit and push files
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+        
+    - name: Install Python dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Create .env file from secrets
+      run: |
+        cat > .env << EOF
+        GROK_API_KEY=${{ secrets.GROK_API_KEY }}
+        ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}
+        X_CONSUMER_KEY=${{ secrets.X_CONSUMER_KEY }}
+        X_CONSUMER_SECRET=${{ secrets.X_CONSUMER_SECRET }}
+        X_ACCESS_TOKEN=${{ secrets.X_ACCESS_TOKEN }}
+        X_ACCESS_TOKEN_SECRET=${{ secrets.X_ACCESS_TOKEN_SECRET }}
+        EOF
+        
+    - name: Run Tesla Shorts Time script
+      working-directory: ./digests
+      run: |
+        python3 tesla_shorts_time.py
+      env:
+        # Pass through any additional environment variables if needed
+        TZ: UTC
+        
+    - name: List generated files
+      run: |
+        echo "Checking for generated files..."
+        echo "Files in digests/digests/:"
+        ls -lah digests/digests/*.md digests/digests/*.mp3 digests/digests/*.txt 2>/dev/null || echo "No files found in digests/digests/"
+        echo "Files in digests/:"
+        ls -lah digests/*.md digests/*.mp3 digests/*.txt 2>/dev/null || echo "No files found in digests/"
+        
+    - name: Commit and push generated files
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        # Add files from digests/digests/ directory (where script saves them)
+        git add digests/digests/*.md digests/digests/*.mp3 digests/digests/*.txt 2>/dev/null || true
+        # Also check for files directly in digests/ (older format)
+        git add digests/*.md digests/*.mp3 digests/*.txt 2>/dev/null || true
+        echo "Staged files:"
+        git diff --staged --name-only || echo "No files staged"
+        if ! git diff --staged --quiet; then
+          git commit -m "Auto-generated: Tesla Shorts Time $(date +%Y-%m-%d)"
+          git push
+          echo "✅ Files committed and pushed successfully to repository!"
+        else
+          echo "No new files to commit"
+        fi
+
