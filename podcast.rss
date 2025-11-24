@@ -1,21 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+<rss xmlns:ns0="http://www.itunes.com/dtds/podcast-1.0.dtd" version="2.0">
   <channel>
     <title>Tesla Shorts Time Daily</title>
     <link>https://github.com/patricknovak/Tesla-shorts-time</link>
     <description>Daily Tesla news digest and podcast hosted by Patrick in Vancouver. Covering the latest Tesla developments, stock updates, and short squeeze celebrations.</description>
     <language>en-us</language>
     <copyright>Copyright 2025</copyright>
-    <lastBuildDate>Mon, 01 Jan 2025 00:00:00 +0000</lastBuildDate>
-    <itunes:author>Patrick</itunes:author>
-    <itunes:summary>Daily Tesla news digest and podcast covering the latest developments, stock updates, and short squeeze celebrations.</itunes:summary>
-    <itunes:owner>
-      <itunes:name>Patrick</itunes:name>
-      <itunes:email>contact@teslashortstime.com</itunes:email>
-    </itunes:owner>
-    <itunes:image href="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast-image.jpg"/>
-    <itunes:category text="Technology"/>
-    <itunes:explicit>no</itunes:explicit>
+    <lastBuildDate>Mon, 24 Nov 2025 16:36:40 +0000</lastBuildDate>
+    <ns0:author>Patrick</ns0:author>
+    <ns0:summary>Daily Tesla news digest and podcast covering the latest developments, stock updates, and short squeeze celebrations.</ns0:summary>
+    <ns0:owner>
+      <ns0:name>Patrick</ns0:name>
+      <ns0:email>contact@teslashortstime.com</ns0:email>
+    </ns0:owner>
+    <ns0:image href="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast-image.jpg" />
+    <ns0:category text="Technology" />
+    <ns0:explicit>no</ns0:explicit>
+    <item>
+      <title>Tesla Shorts Time Daily - Episode 328 - November 24, 2025</title>
+      <link>https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/digests/digests/Tesla_Shorts_Time_Pod_Ep328_20251124.mp3</link>
+      <description>Daily Tesla news digest for November 24, 2025. TSLA price: $417.65 +26.56 (+6.79%) . Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939...</description>
+      <pubDate>Mon, 24 Nov 2025 08:00:00 +0000</pubDate>
+      <guid isPermaLink="false">tesla-shorts-time-ep328-20251124</guid>
+      <enclosure url="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/digests/digests/Tesla_Shorts_Time_Pod_Ep328_20251124.mp3" type="audio/mpeg" length="13003381" />
+      <itunes:title>Tesla Shorts Time Daily - Episode 328 - November 24, 2025</itunes:title>
+      <itunes:summary>Daily Tesla news digest for November 24, 2025. TSLA price: $417.65 +26.56 (+6.79%) . Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939...</itunes:summary>
+      <itunes:duration>09:01</itunes:duration>
+      <itunes:episode>328</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <itunes:explicit>no</itunes:explicit>
+    </item>
   </channel>
 </rss>
-
