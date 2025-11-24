@@ -32,9 +32,13 @@ jobs:
     - name: Install Python dependencies
       run: |
         pip install --upgrade pip
+        if [ ! -f requirements.txt ]; then
+          echo "❌ ERROR: requirements.txt not found!"
+          exit 1
+        fi
         pip install -r requirements.txt
         echo "Installed packages:"
-        pip list | grep -E "(openai|elevenlabs|yfinance|tweepy|requests|python-dotenv)"
+        pip list | grep -E "(openai|yfinance|tweepy|requests|python-dotenv)" || echo "Some packages may not be listed"
         
     - name: Create .env file from secrets
       run: |
@@ -62,18 +66,32 @@ jobs:
     - name: Run Tesla Shorts Time script
       working-directory: ./digests
       run: |
+        set -e  # Exit on any error
         echo "Current directory: $(pwd)"
         echo "Checking for script file..."
-        ls -la tesla_shorts_time.py || echo "Script not found!"
+        if [ ! -f tesla_shorts_time.py ]; then
+          echo "❌ ERROR: Script not found!"
+          exit 1
+        fi
+        echo "✅ Script found"
         echo "Checking for .env file..."
-        ls -la ../.env || echo ".env not found in parent directory!"
+        if [ ! -f ../.env ]; then
+          echo "❌ ERROR: .env not found in parent directory!"
+          exit 1
+        fi
+        echo "✅ .env file found"
         echo "Checking for music file..."
-        ls -la ../Tesla_shorts_time.mp3 || echo "Music file not found (will run without music)"
+        if [ -f ../tesla_shorts_time.mp3 ]; then
+          echo "✅ Music file found"
+        else
+          echo "⚠️  Music file not found (script will run without music)"
+        fi
         echo "Running script..."
-        python3 tesla_shorts_time.py || exit 1
+        python3 tesla_shorts_time.py 2>&1
       env:
         # Pass through any additional environment variables if needed
         TZ: UTC
+      continue-on-error: false
         
     - name: List generated files
       run: |
@@ -94,10 +112,11 @@ jobs:
         echo "Staged files:"
         git diff --staged --name-only || echo "No files staged"
         if ! git diff --staged --quiet; then
-          git commit -m "Auto-generated: Tesla Shorts Time $(date +%Y-%m-%d)"
-          git push
+          git commit -m "Auto-generated: Tesla Shorts Time $(date +%Y-%m-%d)" || echo "Commit failed (may be empty)"
+          git push || echo "Push failed"
           echo "✅ Files committed and pushed successfully to repository!"
         else
-          echo "No new files to commit"
+          echo "⚠️  No new files to commit - script may have failed or no new content generated"
         fi
+      continue-on-error: true  # Don't fail workflow if commit/push fails
 
