@@ -33,22 +33,44 @@ jobs:
       run: |
         pip install --upgrade pip
         pip install -r requirements.txt
+        echo "Installed packages:"
+        pip list | grep -E "(openai|elevenlabs|yfinance|tweepy|requests|python-dotenv)"
         
     - name: Create .env file from secrets
       run: |
+        echo "Creating .env file..."
         cat > .env << EOF
         GROK_API_KEY=${{ secrets.GROK_API_KEY }}
         ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}
-        X_CONSUMER_KEY=${{ secrets.X_CONSUMER_KEY || '' }}
-        X_CONSUMER_SECRET=${{ secrets.X_CONSUMER_SECRET || '' }}
-        X_ACCESS_TOKEN=${{ secrets.X_ACCESS_TOKEN || '' }}
-        X_ACCESS_TOKEN_SECRET=${{ secrets.X_ACCESS_TOKEN_SECRET || '' }}
+        X_CONSUMER_KEY=${{ secrets.X_CONSUMER_KEY }}
+        X_CONSUMER_SECRET=${{ secrets.X_CONSUMER_SECRET }}
+        X_ACCESS_TOKEN=${{ secrets.X_ACCESS_TOKEN }}
+        X_ACCESS_TOKEN_SECRET=${{ secrets.X_ACCESS_TOKEN_SECRET }}
         EOF
+        echo ".env file created (checking if keys are set)..."
+        if [ -z "${{ secrets.GROK_API_KEY }}" ]; then
+          echo "⚠️  WARNING: GROK_API_KEY is not set!"
+        else
+          echo "✅ GROK_API_KEY is set"
+        fi
+        if [ -z "${{ secrets.ELEVENLABS_API_KEY }}" ]; then
+          echo "⚠️  WARNING: ELEVENLABS_API_KEY is not set!"
+        else
+          echo "✅ ELEVENLABS_API_KEY is set"
+        fi
         
     - name: Run Tesla Shorts Time script
       working-directory: ./digests
       run: |
-        python3 tesla_shorts_time.py
+        echo "Current directory: $(pwd)"
+        echo "Checking for script file..."
+        ls -la tesla_shorts_time.py || echo "Script not found!"
+        echo "Checking for .env file..."
+        ls -la ../.env || echo ".env not found in parent directory!"
+        echo "Checking for music file..."
+        ls -la ../Tesla_shorts_time.mp3 || echo "Music file not found (will run without music)"
+        echo "Running script..."
+        python3 tesla_shorts_time.py || exit 1
       env:
         # Pass through any additional environment variables if needed
         TZ: UTC
