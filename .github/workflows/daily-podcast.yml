@@ -39,10 +39,10 @@ jobs:
         cat > .env << EOF
         GROK_API_KEY=${{ secrets.GROK_API_KEY }}
         ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}
-        X_CONSUMER_KEY=${{ secrets.X_CONSUMER_KEY }}
-        X_CONSUMER_SECRET=${{ secrets.X_CONSUMER_SECRET }}
-        X_ACCESS_TOKEN=${{ secrets.X_ACCESS_TOKEN }}
-        X_ACCESS_TOKEN_SECRET=${{ secrets.X_ACCESS_TOKEN_SECRET }}
+        X_CONSUMER_KEY=${{ secrets.X_CONSUMER_KEY || '' }}
+        X_CONSUMER_SECRET=${{ secrets.X_CONSUMER_SECRET || '' }}
+        X_ACCESS_TOKEN=${{ secrets.X_ACCESS_TOKEN || '' }}
+        X_ACCESS_TOKEN_SECRET=${{ secrets.X_ACCESS_TOKEN_SECRET || '' }}
         EOF
         
     - name: Run Tesla Shorts Time script
