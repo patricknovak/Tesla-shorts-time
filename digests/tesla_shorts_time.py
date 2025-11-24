@@ -450,15 +450,32 @@ def update_rss_feed(
         mp3_duration: Duration in seconds
         base_url: Base URL for serving files
     """
+    # Register namespace to preserve 'itunes' prefix (not ns0)
+    ET.register_namespace("itunes", "http://www.itunes.com/dtds/podcast-1.0.dtd")
+    ET.register_namespace("content", "http://purl.org/rss/1.0/modules/content/")
+    
     # RSS namespace
     ns = {"itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd"}
     
     # Parse existing RSS or create new
     if rss_path.exists():
         try:
-            tree = ET.parse(rss_path)
-            root = tree.getroot()
+            # Read and fix namespace issues before parsing
+            with open(rss_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            # Fix any existing namespace issues
+            content = content.replace('xmlns:ns0=', 'xmlns:itunes=')
+            content = content.replace('xmlns:ns1=', 'xmlns:content=')
+            content = content.replace('<ns0:', '<itunes:')
+            content = content.replace('</ns0:', '</itunes:')
+            content = content.replace('<ns1:', '<content:')
+            content = content.replace('</ns1:', '</content:')
+            
+            # Parse from string
+            root = ET.fromstring(content.encode('utf-8'))
             channel = root.find("channel")
+            if channel is None:
+                raise ValueError("Channel element not found in RSS feed")
         except Exception as e:
             logging.warning(f"Could not parse existing RSS feed: {e}, creating new one")
             root = None
@@ -566,6 +583,24 @@ def update_rss_feed(
         with open(rss_path, "wb") as f:
             f.write('<?xml version="1.0" encoding="UTF-8"?>\n'.encode('utf-8'))
             tree.write(f, encoding="utf-8", xml_declaration=False)
+        
+        # Post-process to fix namespace prefixes (ElementTree sometimes uses ns0 instead of itunes)
+        # Read the file, replace ns0: with itunes: and ns1: with content: if needed
+        with open(rss_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        
+        # Replace namespace prefixes
+        content = content.replace('xmlns:ns0="http://www.itunes.com/dtds/podcast-1.0.dtd"', 'xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"')
+        content = content.replace('xmlns:ns1="http://purl.org/rss/1.0/modules/content/"', 'xmlns:content="http://purl.org/rss/1.0/modules/content/"')
+        content = content.replace('<ns0:', '<itunes:')
+        content = content.replace('</ns0:', '</itunes:')
+        content = content.replace('<ns1:', '<content:')
+        content = content.replace('</ns1:', '</content:')
+        
+        # Write back
+        with open(rss_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        
         logging.info(f"RSS feed updated → {rss_path}")
         logging.info(f"RSS feed contains {len(channel.findall('item'))} episode(s)")
     except Exception as e:
