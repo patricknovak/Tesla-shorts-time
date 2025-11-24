@@ -109,6 +109,8 @@ jobs:
         git add digests/digests/*.md digests/digests/*.mp3 digests/digests/*.txt 2>/dev/null || true
         # Also check for files directly in digests/ (older format)
         git add digests/*.md digests/*.mp3 digests/*.txt 2>/dev/null || true
+        # Add RSS feed file
+        git add podcast.rss 2>/dev/null || true
         echo "Staged files:"
         git diff --staged --name-only || echo "No files staged"
         if ! git diff --staged --quiet; then

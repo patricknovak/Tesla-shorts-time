@@ -12,6 +12,7 @@ import datetime
 import subprocess
 import requests
 import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from dotenv import load_dotenv
 import yfinance as yf
@@ -404,6 +405,154 @@ def get_audio_duration(path: Path) -> float:
         logging.warning(f"Unable to determine duration for {path}: {exc}")
         return 0.0
 
+
+def format_duration(seconds: float) -> str:
+    """Format duration in seconds to HH:MM:SS or MM:SS format."""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    if hours > 0:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+
+def update_rss_feed(
+    rss_path: Path,
+    episode_num: int,
+    episode_title: str,
+    episode_description: str,
+    episode_date: datetime.date,
+    mp3_filename: str,
+    mp3_duration: float,
+    mp3_path: Path,
+    base_url: str = "https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main"
+):
+    """
+    Update or create RSS feed with new episode.
+    
+    Args:
+        rss_path: Path to RSS feed XML file
+        episode_num: Episode number
+        episode_title: Episode title
+        episode_description: Episode description
+        episode_date: Publication date
+        mp3_filename: Filename of MP3 (relative to digests/digests/)
+        mp3_duration: Duration in seconds
+        base_url: Base URL for serving files
+    """
+    # RSS namespace
+    ns = {"itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd"}
+    
+    # Parse existing RSS or create new
+    if rss_path.exists():
+        try:
+            tree = ET.parse(rss_path)
+            root = tree.getroot()
+            channel = root.find("channel")
+        except Exception as e:
+            logging.warning(f"Could not parse existing RSS feed: {e}, creating new one")
+            root = None
+            channel = None
+    else:
+        root = None
+        channel = None
+    
+    # Create new RSS feed if needed
+    if root is None:
+        root = ET.Element("rss", version="2.0")
+        root.set("xmlns:itunes", "http://www.itunes.com/dtds/podcast-1.0.dtd")
+        root.set("xmlns:content", "http://purl.org/rss/1.0/modules/content/")
+        channel = ET.SubElement(root, "channel")
+        
+        # Channel metadata
+        ET.SubElement(channel, "title").text = "Tesla Shorts Time Daily"
+        ET.SubElement(channel, "link").text = "https://github.com/patricknovak/Tesla-shorts-time"
+        ET.SubElement(channel, "description").text = "Daily Tesla news digest and podcast hosted by Patrick in Vancouver. Covering the latest Tesla developments, stock updates, and short squeeze celebrations."
+        ET.SubElement(channel, "language").text = "en-us"
+        ET.SubElement(channel, "copyright").text = f"Copyright {datetime.date.today().year}"
+        ET.SubElement(channel, "lastBuildDate").text = datetime.datetime.now(datetime.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
+        
+        # iTunes metadata
+        itunes_author = ET.SubElement(channel, "itunes:author")
+        itunes_author.text = "Patrick"
+        itunes_summary = ET.SubElement(channel, "itunes:summary")
+        itunes_summary.text = "Daily Tesla news digest and podcast covering the latest developments, stock updates, and short squeeze celebrations."
+        itunes_owner = ET.SubElement(channel, "itunes:owner")
+        ET.SubElement(itunes_owner, "itunes:name").text = "Patrick"
+        ET.SubElement(itunes_owner, "itunes:email").text = "contact@teslashortstime.com"
+        itunes_image = ET.SubElement(channel, "itunes:image")
+        itunes_image.set("href", f"{base_url}/podcast-image.jpg")  # Optional: add image later
+        itunes_cat = ET.SubElement(channel, "itunes:category")
+        itunes_cat.set("text", "Technology")
+        ET.SubElement(channel, "itunes:explicit").text = "no"
+    
+    # Check if episode already exists (by GUID)
+    episode_guid = f"tesla-shorts-time-ep{episode_num:03d}-{episode_date:%Y%m%d}"
+    existing_items = channel.findall("item")
+    for item in existing_items:
+        guid_elem = item.find("guid")
+        if guid_elem is not None and guid_elem.text == episode_guid:
+            logging.info(f"Episode {episode_num} already in RSS feed, skipping")
+            return
+    
+    # Create new episode item
+    item = ET.SubElement(channel, "item")
+    ET.SubElement(item, "title").text = episode_title
+    ET.SubElement(item, "link").text = f"{base_url}/digests/digests/{mp3_filename}"
+    
+    # Description (use CDATA for HTML content)
+    description_elem = ET.SubElement(item, "description")
+    description_elem.text = ET.CDATA(episode_description)
+    
+    # Publication date (RFC 822 format)
+    pub_date = datetime.datetime.combine(episode_date, datetime.time(8, 0, 0))
+    pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
+    ET.SubElement(item, "pubDate").text = pub_date.strftime("%a, %d %b %Y %H:%M:%S %z")
+    
+    # GUID (must be unique and permanent)
+    guid_elem = ET.SubElement(item, "guid", isPermaLink="false")
+    guid_elem.text = episode_guid
+    
+    # Enclosure (MP3 file)
+    mp3_url = f"{base_url}/digests/digests/{mp3_filename}"
+    # Get file size
+    mp3_size = mp3_path.stat().st_size if mp3_path.exists() else 0
+    enclosure = ET.SubElement(item, "enclosure")
+    enclosure.set("url", mp3_url)
+    enclosure.set("type", "audio/mpeg")
+    enclosure.set("length", str(mp3_size))
+    
+    # iTunes-specific tags
+    ET.SubElement(item, "itunes:title").text = episode_title
+    itunes_summary = ET.SubElement(item, "itunes:summary")
+    itunes_summary.text = episode_description
+    ET.SubElement(item, "itunes:duration").text = format_duration(mp3_duration)
+    ET.SubElement(item, "itunes:episode").text = str(episode_num)
+    ET.SubElement(item, "itunes:episodeType").text = "full"
+    ET.SubElement(item, "itunes:explicit").text = "no"
+    
+    # Update lastBuildDate
+    channel.find("lastBuildDate").text = datetime.datetime.now(datetime.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
+    
+    # Sort items by pubDate (newest first)
+    items = channel.findall("item")
+    items.sort(key=lambda x: x.find("pubDate").text if x.find("pubDate") is not None else "", reverse=True)
+    
+    # Remove all items and re-add in sorted order
+    for item in items:
+        channel.remove(item)
+    for item in items:
+        channel.append(item)
+    
+    # Write RSS feed
+    tree = ET.ElementTree(root)
+    ET.indent(tree, space="  ")
+    # Write with proper XML declaration
+    with open(rss_path, "wb") as f:
+        f.write('<?xml version="1.0" encoding="UTF-8"?>\n'.encode('utf-8'))
+        tree.write(f, encoding="utf-8", xml_declaration=False)
+    logging.info(f"RSS feed updated → {rss_path}")
+
 # Since there's only one voice (Patrick), combine entire script into one segment
 # Remove speaker labels and sound cues, keep only the actual spoken text
 full_text_parts = []
@@ -618,6 +767,47 @@ else:
         os.remove(str(music_silence))
     
     logging.info("BROADCAST-QUALITY PODCAST CREATED – PROFESSIONAL MUSIC TRANSITIONS APPLIED")
+
+# ========================== 5. UPDATE RSS FEED ==========================
+if not TEST_MODE and final_mp3.exists():
+    try:
+        # Get audio duration
+        audio_duration = get_audio_duration(final_mp3)
+        
+        # Create episode title and description
+        episode_title = f"Tesla Shorts Time Daily - Episode {episode_num} - {today_str}"
+        
+        # Extract a summary from the X thread (first 500 chars or first paragraph)
+        episode_description = f"Daily Tesla news digest for {today_str}. TSLA price: ${price:.2f} {change_str}. "
+        # Get first meaningful paragraph from x_thread
+        lines = x_thread.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line and not line.startswith('#') and not line.startswith('**') and len(line) > 50:
+                episode_description += line[:400] + "..."
+                break
+        
+        # RSS feed path (save in project root for easy access)
+        rss_path = project_root / "podcast.rss"
+        
+        # MP3 filename relative to digests/digests/ (where files are saved)
+        mp3_filename = final_mp3.name
+        
+        # Update RSS feed
+        update_rss_feed(
+            rss_path=rss_path,
+            episode_num=episode_num,
+            episode_title=episode_title,
+            episode_description=episode_description,
+            episode_date=datetime.date.today(),
+            mp3_filename=mp3_filename,
+            mp3_duration=audio_duration,
+            mp3_path=final_mp3
+        )
+        logging.info(f"RSS feed updated with Episode {episode_num}")
+    except Exception as e:
+        logging.error(f"Failed to update RSS feed: {e}")
+        logging.warning("RSS feed update failed, but continuing...")
 
 # Post everything to X in ONE SINGLE POST
 if ENABLE_X_POSTING:
