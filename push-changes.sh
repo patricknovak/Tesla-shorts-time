@@ -42,11 +42,32 @@ echo ""
 echo "💾 Committing with message: '$COMMIT_MSG'"
 git commit -m "$COMMIT_MSG"
 
+# Pull latest changes before pushing (in case GitHub Actions or others pushed)
+echo ""
+echo "📥 Checking for remote changes..."
+if git fetch origin; then
+    LOCAL=$(git rev-parse @)
+    REMOTE=$(git rev-parse @{u})
+    if [ "$LOCAL" != "$REMOTE" ]; then
+        echo "⚠️  Remote has new changes. Pulling with rebase..."
+        git pull --rebase
+    else
+        echo "✅ Local is up to date with remote."
+    fi
+fi
+
 # Push
 echo ""
 echo "🚀 Pushing to remote..."
-git push
-
-echo ""
-echo "✅ Done! Changes have been pushed to the repository."
+if git push; then
+    echo ""
+    echo "✅ Done! Changes have been pushed to the repository."
+else
+    echo ""
+    echo "❌ Push failed. This might happen if:"
+    echo "   - Remote has new changes (try running: git pull --rebase && git push)"
+    echo "   - Network issues"
+    echo "   - Permission problems"
+    exit 1
+fi
 

@@ -12,6 +12,7 @@ import datetime
 import subprocess
 import requests
 import tempfile
+import html
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from dotenv import load_dotenv
@@ -183,23 +184,23 @@ Use this exact structure and markdown (includes invisible zero-width spaces for 
 
 Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939
 
-### Top 6 News Items (number the news items 1–5; empty lines between items)
+### Top 6 News Items
 
 **Title That Fits in One Line: DD Month, YYYY, HH:MM AM/PM PST, Source Name**
    2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with link in Source
 ... (continue exactly this format up to 5)
 
-### Top 10 X Posts (number the X posts 1-10; empty lines between posts)
+### Top 10 X Posts
 
 **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
    2–4 sentences explaining the post and its significance. End with Post link.
+... (continue exactly this format up to 10)
 
 **Overall Sentiment Score:** XX/100 (Positive / Neutral / Negative)
-(Line 1 explaining main positive drivers)
-(Line 2 explaining any negative drag and why it's temporary or overblown)   
+   2–4 sentences explaining the sentiment score and why it is the score it is. 
 
 **Closing Price Prediction:** (Give a prediction for the closing price of TSLA today based on the information you currently know.)
-(Key bullish catalyst today + historical pattern after similar news (e.g. if it's a Friday, use the historical pattern of the previous Friday))
+   2–4 sentences explaining the reasoning for the prediction.
 
 ## Short Spot
 One bearish news or X post item that is a major negative for Tesla and the stock.
@@ -509,9 +510,9 @@ def update_rss_feed(
     ET.SubElement(item, "title").text = episode_title
     ET.SubElement(item, "link").text = f"{base_url}/digests/digests/{mp3_filename}"
     
-    # Description (use CDATA for HTML content)
+    # Description (escape XML special characters)
     description_elem = ET.SubElement(item, "description")
-    description_elem.text = ET.CDATA(episode_description)
+    description_elem.text = html.escape(episode_description)
     
     # Publication date (RFC 822 format)
     pub_date = datetime.datetime.combine(episode_date, datetime.time(8, 0, 0))
@@ -541,26 +542,35 @@ def update_rss_feed(
     ET.SubElement(item, "itunes:explicit").text = "no"
     
     # Update lastBuildDate
-    channel.find("lastBuildDate").text = datetime.datetime.now(datetime.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
+    last_build_elem = channel.find("lastBuildDate")
+    if last_build_elem is not None:
+        last_build_elem.text = datetime.datetime.now(datetime.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
+    else:
+        ET.SubElement(channel, "lastBuildDate").text = datetime.datetime.now(datetime.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
     
     # Sort items by pubDate (newest first)
     items = channel.findall("item")
-    items.sort(key=lambda x: x.find("pubDate").text if x.find("pubDate") is not None else "", reverse=True)
-    
-    # Remove all items and re-add in sorted order
-    for item in items:
-        channel.remove(item)
-    for item in items:
-        channel.append(item)
+    if len(items) > 1:
+        items.sort(key=lambda x: x.find("pubDate").text if x.find("pubDate") is not None else "", reverse=True)
+        # Remove all items and re-add in sorted order
+        for item in items:
+            channel.remove(item)
+        for item in items:
+            channel.append(item)
     
     # Write RSS feed
-    tree = ET.ElementTree(root)
-    ET.indent(tree, space="  ")
-    # Write with proper XML declaration
-    with open(rss_path, "wb") as f:
-        f.write('<?xml version="1.0" encoding="UTF-8"?>\n'.encode('utf-8'))
-        tree.write(f, encoding="utf-8", xml_declaration=False)
-    logging.info(f"RSS feed updated → {rss_path}")
+    try:
+        tree = ET.ElementTree(root)
+        ET.indent(tree, space="  ")
+        # Write with proper XML declaration
+        with open(rss_path, "wb") as f:
+            f.write('<?xml version="1.0" encoding="UTF-8"?>\n'.encode('utf-8'))
+            tree.write(f, encoding="utf-8", xml_declaration=False)
+        logging.info(f"RSS feed updated → {rss_path}")
+        logging.info(f"RSS feed contains {len(channel.findall('item'))} episode(s)")
+    except Exception as e:
+        logging.error(f"Failed to write RSS feed to {rss_path}: {e}", exc_info=True)
+        raise
 
 # Since there's only one voice (Patrick), combine entire script into one segment
 # Remove speaker labels and sound cues, keep only the actual spoken text
@@ -815,7 +825,7 @@ if not TEST_MODE and final_mp3.exists():
         )
         logging.info(f"RSS feed updated with Episode {episode_num}")
     except Exception as e:
-        logging.error(f"Failed to update RSS feed: {e}")
+        logging.error(f"Failed to update RSS feed: {e}", exc_info=True)
         logging.warning("RSS feed update failed, but continuing...")
 
 # Post everything to X in ONE SINGLE POST
