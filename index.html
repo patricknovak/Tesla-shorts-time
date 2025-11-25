@@ -912,22 +912,7 @@
                 return;
             }
             
-            // Use Twitter's publish.twitter.com embed code
-            // This is more reliable than widgets.js
-            const embedCode = `
-                <a class="twitter-timeline" 
-                   data-theme="light" 
-                   data-tweet-limit="5" 
-                   data-chrome="noheader nofooter noscrollbar" 
-                   data-width="360"
-                   data-height="500"
-                   href="https://twitter.com/teslashortstime?ref_src=twsrc%5Etfw">
-                   Tweets by teslashortstime
-                </a>
-                <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
-            `;
-            
-            // Create a wrapper div and inject the embed code
+            // Create a wrapper div for the Twitter timeline
             postsEl.innerHTML = '<div class="twitter-iframe-container"></div>';
             const iframeContainer = postsEl.querySelector('.twitter-iframe-container');
             
