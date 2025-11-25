@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tesla Shorts Time Daily - Podcast Player</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .header img {
+            width: 200px;
+            height: 200px;
+            border-radius: 20px;
+            margin: 20px auto;
+            display: block;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .episode {
+            border: 2px solid #e0e0e0;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            background: #fafafa;
+        }
+        
+        .episode:hover {
+            border-color: #667eea;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        .episode.active {
+            border-color: #667eea;
+            background: #f0f4ff;
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .episode-title {
+            font-size: 1.4em;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 10px;
+        }
+        
+        .episode-date {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+        }
+        
+        .episode-description {
+            color: #555;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        
+        .player-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .play-button {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .play-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        
+        .play-button.playing {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        .progress-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+        
+        .time-display {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: #f5576c;
+        }
+        
+        .rss-link {
+            text-align: center;
+            padding: 20px;
+            background: #f5f5f5;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .rss-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .rss-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚗⚡ Tesla Shorts Time Daily</h1>
+            <p>Daily Tesla News Digest & Podcast</p>
+            <p style="margin-top: 10px; font-size: 0.9em;">Hosted by Patrick in Vancouver</p>
+            <img id="podcast-image" src="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast-image.jpg" alt="Podcast Cover" onerror="this.style.display='none'">
+        </div>
+        
+        <div class="content">
+            <div id="loading" class="loading">Loading episodes...</div>
+            <div id="error" class="error" style="display: none;"></div>
+            <div id="episodes"></div>
+        </div>
+        
+        <div class="rss-link">
+            <a href="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast.rss" target="_blank">📡 RSS Feed</a> | 
+            <a href="https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939" target="_blank">🍎 Apple Podcasts</a> |
+            <a href="https://github.com/patricknovak/Tesla-shorts-time" target="_blank">💻 GitHub</a>
+        </div>
+    </div>
+    
+    <script>
+        const RSS_FEED_URL = 'https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast.rss';
+        let currentAudio = null;
+        let currentEpisode = null;
+        
+        // Parse RSS feed
+        async function loadPodcast() {
+            try {
+                const response = await fetch(RSS_FEED_URL);
+                if (!response.ok) throw new Error('Failed to load RSS feed');
+                
+                const xmlText = await response.text();
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+                
+                // Check for parsing errors
+                const parserError = xmlDoc.querySelector('parsererror');
+                if (parserError) {
+                    throw new Error('Failed to parse RSS feed');
+                }
+                
+                const items = xmlDoc.querySelectorAll('item');
+                const episodes = [];
+                
+                items.forEach(item => {
+                    const title = item.querySelector('title')?.textContent || 'Untitled';
+                    const description = item.querySelector('description')?.textContent || '';
+                    const pubDate = item.querySelector('pubDate')?.textContent || '';
+                    const enclosure = item.querySelector('enclosure');
+                    const audioUrl = enclosure?.getAttribute('url') || '';
+                    const duration = item.querySelector('itunes\\:duration, duration')?.textContent || '';
+                    
+                    episodes.push({
+                        title,
+                        description: description.replace(/<[^>]*>/g, '').substring(0, 200) + '...',
+                        pubDate: formatDate(pubDate),
+                        audioUrl,
+                        duration
+                    });
+                });
+                
+                displayEpisodes(episodes);
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = `Error loading podcast: ${error.message}`;
+            }
+        }
+        
+        function formatDate(dateString) {
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                });
+            } catch {
+                return dateString;
+            }
+        }
+        
+        function displayEpisodes(episodes) {
+            const container = document.getElementById('episodes');
+            const loading = document.getElementById('loading');
+            
+            loading.style.display = 'none';
+            
+            if (episodes.length === 0) {
+                container.innerHTML = '<div class="error">No episodes found</div>';
+                return;
+            }
+            
+            container.innerHTML = episodes.map((episode, index) => `
+                <div class="episode" data-index="${index}">
+                    <div class="episode-title">${episode.title}</div>
+                    <div class="episode-date">📅 ${episode.pubDate} ${episode.duration ? '• ⏱️ ' + episode.duration : ''}</div>
+                    <div class="episode-description">${episode.description}</div>
+                    <div class="player-controls">
+                        <button class="play-button" onclick="togglePlay(${index}, '${episode.audioUrl}', '${episode.title.replace(/'/g, "\\'")}')">
+                            ▶
+                        </button>
+                        <div class="progress-container">
+                            <div class="progress-bar" onclick="seek(event, ${index})">
+                                <div class="progress-fill" id="progress-${index}"></div>
+                            </div>
+                            <div class="time-display">
+                                <span id="current-${index}">0:00</span>
+                                <span id="total-${index}">${episode.duration || '0:00'}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <audio id="audio-${index}" src="${episode.audioUrl}" preload="none"></audio>
+                </div>
+            `).join('');
+        }
+        
+        function togglePlay(index, audioUrl, title) {
+            const episode = document.querySelector(`[data-index="${index}"]`);
+            const button = episode.querySelector('.play-button');
+            const audio = document.getElementById(`audio-${index}`);
+            
+            // Stop current audio if playing different episode
+            if (currentAudio && currentAudio !== audio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+                if (currentEpisode) {
+                    const prevButton = currentEpisode.querySelector('.play-button');
+                    const prevEpisode = currentEpisode;
+                    prevButton.textContent = '▶';
+                    prevButton.classList.remove('playing');
+                    prevEpisode.classList.remove('active');
+                }
+            }
+            
+            if (audio.paused) {
+                audio.play();
+                button.textContent = '⏸';
+                button.classList.add('playing');
+                episode.classList.add('active');
+                currentAudio = audio;
+                currentEpisode = episode;
+                
+                // Update progress
+                audio.addEventListener('timeupdate', () => updateProgress(index, audio));
+                audio.addEventListener('loadedmetadata', () => {
+                    const total = document.getElementById(`total-${index}`);
+                    total.textContent = formatTime(audio.duration);
+                });
+            } else {
+                audio.pause();
+                button.textContent = '▶';
+                button.classList.remove('playing');
+                episode.classList.remove('active');
+                currentAudio = null;
+                currentEpisode = null;
+            }
+        }
+        
+        function updateProgress(index, audio) {
+            const progress = document.getElementById(`progress-${index}`);
+            const current = document.getElementById(`current-${index}`);
+            
+            if (audio.duration) {
+                const percent = (audio.currentTime / audio.duration) * 100;
+                progress.style.width = percent + '%';
+                current.textContent = formatTime(audio.currentTime);
+            }
+        }
+        
+        function formatTime(seconds) {
+            if (!seconds || isNaN(seconds)) return '0:00';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        function seek(event, index) {
+            const audio = document.getElementById(`audio-${index}`);
+            const progressBar = event.currentTarget;
+            const rect = progressBar.getBoundingClientRect();
+            const percent = (event.clientX - rect.left) / rect.width;
+            audio.currentTime = percent * audio.duration;
+        }
+        
+        // Load podcast on page load
+        loadPodcast();
+        
+        // Auto-refresh every 5 minutes to get new episodes
+        setInterval(loadPodcast, 5 * 60 * 1000);
+    </script>
+</body>
+</html>
+
