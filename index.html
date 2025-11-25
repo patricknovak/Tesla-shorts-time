@@ -688,35 +688,17 @@
                     // Update progress as audio plays
                     if (audio) {
                         audio.addEventListener('timeupdate', () => {
-                            updateProgress(index);
+                            updateProgress(index, audio);
                         });
                         
                         audio.addEventListener('loadedmetadata', () => {
-                            updateTotalTime(index);
+                            const total = document.getElementById(`total-${index}`);
+                            if (total) {
+                                total.textContent = formatTime(audio.duration);
+                            }
                         });
                     }
                 });
-            }
-        }
-        
-        function updateProgress(index) {
-            const audio = document.getElementById(`audio-${index}`);
-            const progressFill = document.getElementById(`progress-${index}`);
-            const currentTimeEl = document.getElementById(`current-${index}`);
-            
-            if (audio && progressFill && currentTimeEl) {
-                const progress = (audio.currentTime / audio.duration) * 100;
-                progressFill.style.width = `${progress}%`;
-                currentTimeEl.textContent = formatTime(audio.currentTime);
-            }
-        }
-        
-        function updateTotalTime(index) {
-            const audio = document.getElementById(`audio-${index}`);
-            const totalTimeEl = document.getElementById(`total-${index}`);
-            
-            if (audio && totalTimeEl) {
-                totalTimeEl.textContent = formatTime(audio.duration);
             }
         }
         
@@ -727,10 +709,31 @@
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
         
+        function updateProgress(index, audio) {
+            const progress = document.getElementById(`progress-${index}`);
+            const current = document.getElementById(`current-${index}`);
+            
+            if (audio && audio.duration && progress && current) {
+                const percent = (audio.currentTime / audio.duration) * 100;
+                progress.style.width = percent + '%';
+                current.textContent = formatTime(audio.currentTime);
+            }
+        }
+        
         function togglePlay(index, audioUrl, title) {
             const episode = document.querySelector(`[data-index="${index}"]`);
+            if (!episode) {
+                console.error('Episode not found for index:', index);
+                return;
+            }
+            
             const button = episode.querySelector('.play-button');
             const audio = document.getElementById(`audio-${index}`);
+            
+            if (!audio) {
+                console.error('Audio element not found for index:', index);
+                return;
+            }
             
             // Stop current audio if playing different episode
             if (currentAudio && currentAudio !== audio) {
@@ -738,53 +741,44 @@
                 currentAudio.currentTime = 0;
                 if (currentEpisode) {
                     const prevButton = currentEpisode.querySelector('.play-button');
-                    const prevEpisode = currentEpisode;
-                    prevButton.textContent = '▶';
-                    prevButton.classList.remove('playing');
-                    prevEpisode.classList.remove('active');
+                    if (prevButton) {
+                        prevButton.textContent = '▶';
+                        prevButton.classList.remove('playing');
+                    }
+                    currentEpisode.classList.remove('active');
                 }
             }
             
             if (audio.paused) {
-                audio.play();
-                button.textContent = '⏸';
-                button.classList.add('playing');
+                audio.play().catch(err => {
+                    console.error('Error playing audio:', err);
+                });
+                if (button) {
+                    button.textContent = '⏸';
+                    button.classList.add('playing');
+                }
                 episode.classList.add('active');
                 currentAudio = audio;
                 currentEpisode = episode;
                 
-                // Update progress
+                // Update progress as audio plays
                 audio.addEventListener('timeupdate', () => updateProgress(index, audio));
                 audio.addEventListener('loadedmetadata', () => {
                     const total = document.getElementById(`total-${index}`);
-                    total.textContent = formatTime(audio.duration);
+                    if (total) {
+                        total.textContent = formatTime(audio.duration);
+                    }
                 });
             } else {
                 audio.pause();
-                button.textContent = '▶';
-                button.classList.remove('playing');
+                if (button) {
+                    button.textContent = '▶';
+                    button.classList.remove('playing');
+                }
                 episode.classList.remove('active');
                 currentAudio = null;
                 currentEpisode = null;
             }
-        }
-        
-        function updateProgress(index, audio) {
-            const progress = document.getElementById(`progress-${index}`);
-            const current = document.getElementById(`current-${index}`);
-            
-            if (audio.duration) {
-                const percent = (audio.currentTime / audio.duration) * 100;
-                progress.style.width = percent + '%';
-                current.textContent = formatTime(audio.currentTime);
-            }
-        }
-        
-        function formatTime(seconds) {
-            if (!seconds || isNaN(seconds)) return '0:00';
-            const mins = Math.floor(seconds / 60);
-            const secs = Math.floor(seconds % 60);
-            return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
         
         function seek(event, index) {
