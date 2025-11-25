@@ -18,6 +18,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import yfinance as yf
 from openai import OpenAI
+from difflib import SequenceMatcher
 
 # ========================== LOGGING ==========================
 logging.basicConfig(
@@ -140,6 +141,58 @@ NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 # ========================== STEP 1: FETCH TESLA NEWS FROM NEWSAPI.ORG ==========================
 logging.info("Step 1: Fetching Tesla news from newsapi.org for the last 24 hours...")
 
+def calculate_similarity(text1: str, text2: str) -> float:
+    """Calculate similarity ratio between two texts (0.0 to 1.0)."""
+    if not text1 or not text2:
+        return 0.0
+    # Normalize: lowercase, remove extra whitespace
+    text1_norm = ' '.join(text1.lower().split())
+    text2_norm = ' '.join(text2.lower().split())
+    return SequenceMatcher(None, text1_norm, text2_norm).ratio()
+
+def remove_similar_items(items, similarity_threshold=0.7, get_text_func=None):
+    """
+    Remove similar items from a list based on text similarity.
+    
+    Args:
+        items: List of items to filter
+        similarity_threshold: Similarity ratio above which items are considered duplicates (0.0-1.0)
+        get_text_func: Function to extract text from item for comparison (default: uses 'title' or 'text' key)
+    
+    Returns:
+        Filtered list with similar items removed (keeps first occurrence)
+    """
+    if not items:
+        return items
+    
+    if get_text_func is None:
+        # Default: try 'title', then 'text', then 'description'
+        def get_text_func(item):
+            if isinstance(item, dict):
+                return item.get('title', '') or item.get('text', '') or item.get('description', '')
+            return str(item)
+    
+    filtered = []
+    for item in items:
+        item_text = get_text_func(item)
+        if not item_text:
+            continue
+        
+        # Check similarity against already accepted items
+        is_similar = False
+        for accepted_item in filtered:
+            accepted_text = get_text_func(accepted_item)
+            similarity = calculate_similarity(item_text, accepted_text)
+            if similarity >= similarity_threshold:
+                is_similar = True
+                logging.debug(f"Filtered similar item (similarity: {similarity:.2f}): {item_text[:50]}...")
+                break
+        
+        if not is_similar:
+            filtered.append(item)
+    
+    return filtered
+
 def fetch_tesla_news():
     """Fetch Tesla-related news from newsapi.org for the last 24 hours."""
     newsapi_url = "https://newsapi.org/v2/everything"
@@ -187,7 +240,18 @@ def fetch_tesla_news():
                 "author": article.get("author", "")
             })
         
-        logging.info(f"Filtered to {len(formatted_articles)} valid Tesla news articles")
+        # Remove similar/duplicate articles based on title similarity
+        before_dedup = len(formatted_articles)
+        formatted_articles = remove_similar_items(
+            formatted_articles,
+            similarity_threshold=0.75,  # 75% similarity = likely duplicate
+            get_text_func=lambda x: f"{x.get('title', '')} {x.get('description', '')}"
+        )
+        after_dedup = len(formatted_articles)
+        if before_dedup != after_dedup:
+            logging.info(f"Removed {before_dedup - after_dedup} similar/duplicate news articles")
+        
+        logging.info(f"Filtered to {len(formatted_articles)} unique Tesla news articles")
         return formatted_articles[:20]  # Return top 20 for selection
         
     except Exception as e:
@@ -308,9 +372,20 @@ def fetch_top_x_posts():
                 seen_ids.add(post["id"])
                 unique_posts.append(post)
         
+        # Remove similar/duplicate posts based on text content similarity
+        before_dedup = len(unique_posts)
+        unique_posts = remove_similar_items(
+            unique_posts,
+            similarity_threshold=0.70,  # 70% similarity = likely duplicate or very similar
+            get_text_func=lambda x: x.get("text", "")
+        )
+        after_dedup = len(unique_posts)
+        if before_dedup != after_dedup:
+            logging.info(f"Removed {before_dedup - after_dedup} similar/duplicate X posts")
+        
         # Get top 20 for selection
         top_posts = unique_posts[:20]
-        logging.info(f"Fetched {len(top_posts)} top X posts (ranked by engagement)")
+        logging.info(f"Fetched {len(top_posts)} unique top X posts (ranked by engagement)")
         
         return top_posts
         
@@ -384,7 +459,8 @@ You are an elite Tesla news curator producing the daily "Tesla Shorts Time" news
 **DIVERSITY RULES (apply after meeting the count requirements):**
 - Max 3 items total from any single news source
 - Max 3 X posts from any single X account username (but you MUST still include 10 total X posts - if needed, allow up to 4 from a single account to meet the 10-post requirement)
-- No duplicate stories or near-duplicate angles
+- **CRITICAL: NO DUPLICATE OR SIMILAR CONTENT** - Each news item and X post must cover a DIFFERENT story/angle. If two items cover the same news story or make the same point, you MUST choose only one and find a different item to replace it
+- **SIMILARITY CHECK**: Before including any item, check if it's similar (≥70% same content/angle) to any other item you've already selected. If so, skip it and choose a different one
 - No stock-quote pages, Yahoo Finance ticker pages, TradingView screenshots, or pure price commentary as "news"
 
 ### FORMATTING (MUST BE EXACT – DO NOT DEVIATE)
@@ -428,12 +504,15 @@ Add a blank line after the sign-off.
 
 ### FINAL VALIDATION BEFORE OUTPUT (MANDATORY)
 Before outputting, verify:
-1. ✅ Exactly 5 news items are included (numbered 1-5)
-2. ✅ Exactly 10 X posts are included (numbered 1-10) - THIS IS CRITICAL AND MANDATORY
-3. ✅ Short Spot section is included
-4. ✅ Short Squeeze section is included
-5. ✅ Daily Challenge section is included
-6. ✅ Inspiration Quote is included
+1. ✅ Exactly 5 news items are included (numbered 1-5) - each covering a DIFFERENT story
+2. ✅ Exactly 10 X posts are included (numbered 1-10) - THIS IS CRITICAL AND MANDATORY - each covering a DIFFERENT topic/angle
+3. ✅ NO DUPLICATES: Each news item and X post covers a unique story/angle (no two items about the same news event)
+4. ✅ Short Spot section is included
+5. ✅ Short Squeeze section is included
+6. ✅ Daily Challenge section is included
+7. ✅ Inspiration Quote is included
+
+**SIMILARITY CHECK**: Review all 5 news items and all 10 X posts. If any two items cover the same story or make the same point, replace one with a different item. Each item must be unique.
 
 **IF YOU DO NOT HAVE EXACTLY 10 X POSTS NUMBERED 1 THROUGH 10, DO NOT OUTPUT. Instead, search for additional X posts or use all available pre-fetched posts to reach exactly 10. The output is INVALID if it contains fewer than 10 X posts.**
 
