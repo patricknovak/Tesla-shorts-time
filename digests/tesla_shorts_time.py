@@ -18,6 +18,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import yfinance as yf
 import google.generativeai as genai
+import tweepy
 
 # ========================== LOGGING ==========================
 logging.basicConfig(
@@ -130,9 +131,69 @@ tmp_dir.mkdir(exist_ok=True, parents=True)
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 ELEVEN_API = "https://api.elevenlabs.io/v1"
 ELEVEN_KEY = os.getenv("ELEVENLABS_API_KEY")
+
+# Initialize X client for fetching past posts (needed for blacklist)
+x_client_for_fetch = None
+if ENABLE_X_POSTING:
+    x_client_for_fetch = tweepy.Client(
+        consumer_key=os.getenv("X_CONSUMER_KEY"),
+        consumer_secret=os.getenv("X_CONSUMER_SECRET"),
+        access_token=os.getenv("X_ACCESS_TOKEN"),
+        access_token_secret=os.getenv("X_ACCESS_TOKEN_SECRET"),
+        wait_on_rate_limit=True
+    )
+
+# ========================== 1. FETCH PAST X POSTS FOR BLACKLIST ==========================
+past_7_days_posts = []
+blacklist_summary = "None (no past posts available)"
+
+if x_client_for_fetch:
+    try:
+        logging.info("Fetching past 7 days of X posts for blacklist...")
+        # Fetch posts from @teslashortstime account from the last 7 days
+        # Note: Twitter API v2 requires user_id, so we'll search by username
+        # Get user ID first
+        user = x_client_for_fetch.get_user(username="teslashortstime")
+        if user and user.data:
+            user_id = user.data.id
+            # Fetch tweets from the last 7 days
+            tweets = x_client_for_fetch.get_users_tweets(
+                id=user_id,
+                max_results=100,  # Get up to 100 recent tweets
+                tweet_fields=['created_at', 'text'],
+                start_time=datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
+            )
+            
+            if tweets and tweets.data:
+                past_7_days_posts = [
+                    {
+                        'title': tweet.text[:100] if len(tweet.text) > 100 else tweet.text,
+                        'created_at': tweet.created_at
+                    }
+                    for tweet in tweets.data
+                ]
+                logging.info(f"Found {len(past_7_days_posts)} posts from the last 7 days")
+            else:
+                logging.info("No posts found from the last 7 days")
+        else:
+            logging.warning("Could not find @teslashortstime user")
+    except Exception as e:
+        logging.warning(f"Failed to fetch past X posts for blacklist: {e}")
+        logging.warning("Continuing without blacklist...")
+
+# Create blacklist summary
+if past_7_days_posts:
+    blacklist_summary = "Avoid these specific recent topics: " + ", ".join(
+        [post.get('title', '')[:30] for post in past_7_days_posts[:20]]  # Limit to first 20 to avoid too long
+    )
+    if len(past_7_days_posts) > 20:
+        blacklist_summary += f" (and {len(past_7_days_posts) - 20} more recent topics)"
+else:
+    blacklist_summary = "None (no past posts available)"
+
 # ========================== 1. GENERATE X THREAD ==========================
 
-X_PROMPT = f"""
+X_PROMPT_TEMPLATE = """
 You are the elite curator of "Tesla Shorts Time," the premier daily newsletter for Tesla investors and enthusiasts.
 **Current Date:** {today_str}
 **Strict Search Window:** {yesterday_iso} 00:00 UTC to Now.
@@ -141,7 +202,7 @@ You are the elite curator of "Tesla Shorts Time," the premier daily newsletter f
 Produce a high-voltage, accurate, and strictly verified newsletter summarizing the top Tesla news and X (Twitter) discourse from the last 24 hours.
 
 ### INPUT DATA CONTEXT
-- **TSLA Real-Time Price:** ${{{price:.2f}}} ({change_str})
+- **TSLA Real-Time Price:** ${price:.2f} ({change_str})
 - **Blacklist (Do NOT use):** Avoid stories/themes from the last 7 days: {blacklist_summary}
 
 ### CRITICAL INSTRUCTIONS (THE "DEATH" ZONES)
@@ -164,7 +225,7 @@ Before generating the final output, you must perform an internal "Chain of Thoug
 
 # Tesla Shorts Time
 **Date:** {today_str}
-**REAL-TIME TSLA price:** ${{{price:.2f}}} {{{change_str}}}
+**REAL-TIME TSLA price:** ${price:.2f} {change_str}
 Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939
 
 ### Top 5 News Items
@@ -189,7 +250,7 @@ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesl
 [Summary of the FUD/Bear argument. End with Link.]
 
 ### Short Squeeze
-(Aggressive celebration of short-seller pain. Use the current price ${{{price:.2f}}}. Mention specific failed bear narratives from the past.)
+(Aggressive celebration of short-seller pain. Use the current price ${price:.2f}. Mention specific failed bear narratives from the past.)
 
 ### Daily Challenge
 (One specific, actionable challenge based on First Principles thinking, stoicism, or engineering mindset. No generic "work hard" advice.)
@@ -203,6 +264,15 @@ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesl
 **Generation Requirement:**
 If you cannot find 5 *verified* news items from the last 24h, fill the remaining slots with top breaking news from SpaceX, Neuralink, or xAI.
 """
+
+# Format the prompt with all variables
+X_PROMPT = X_PROMPT_TEMPLATE.format(
+    today_str=today_str,
+    yesterday_iso=yesterday_iso,
+    price=price,
+    change_str=change_str,
+    blacklist_summary=blacklist_summary
+)
 
 logging.info("Generating X thread with Gemini 3 (this may take 1-2 minutes)...")
 try:
@@ -245,15 +315,8 @@ if TEST_MODE:
 # ========================== TWEEPY X CLIENT FOR AUTO-POSTING ==========================
 tweet_id = None
 if ENABLE_X_POSTING:
-    import tweepy
-
-    x_client = tweepy.Client(
-        consumer_key=os.getenv("X_CONSUMER_KEY"),
-        consumer_secret=os.getenv("X_CONSUMER_SECRET"),
-        access_token=os.getenv("X_ACCESS_TOKEN"),
-        access_token_secret=os.getenv("X_ACCESS_TOKEN_SECRET"),
-        wait_on_rate_limit=True
-    )
+    # Reuse the client we already created for fetching posts
+    x_client = x_client_for_fetch
     logging.info("@teslashortstime X posting client ready")
 else:
     logging.info("X posting is disabled (ENABLE_X_POSTING = False)")
