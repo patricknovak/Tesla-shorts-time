@@ -642,6 +642,9 @@
                     const duration = escapeHtml(episode.duration || '0:00');
                     const audioUrl = episode.audioUrl || '';
                     
+                    // Escape audioUrl for use in HTML
+                    const escapedAudioUrl = audioUrl.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                    
                     episodeDiv.innerHTML = `
                         <div class="episode-title">${title}</div>
                         <div class="episode-date">📅 ${pubDate} ${duration ? '• ⏱️ ' + duration : ''}</div>
@@ -660,7 +663,7 @@
                                 </div>
                             </div>
                         </div>
-                        <audio id="audio-${index}" src="${audioUrl}" preload="none"></audio>
+                        <audio id="audio-${index}" src="${escapedAudioUrl}" preload="none"></audio>
                     `;
                     
                     container.appendChild(episodeDiv);
