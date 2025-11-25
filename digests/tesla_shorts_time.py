@@ -341,15 +341,21 @@ else:
 # Format X posts for the prompt
 x_posts_section = ""
 if top_x_posts:
-    x_posts_section = "## PRE-FETCHED X POSTS (from X API - last 24 hours, ranked by engagement):\n\n"
-    for i, post in enumerate(top_x_posts[:15], 1):  # Top 15 posts
+    # Include all available posts (up to 20) to give Grok more options
+    num_posts_to_include = min(len(top_x_posts), 20)
+    x_posts_section = f"## PRE-FETCHED X POSTS (from X API - last 24 hours, ranked by engagement):\n\n"
+    x_posts_section += f"**IMPORTANT: You have {len(top_x_posts)} pre-fetched X posts available. You MUST select exactly 10 of these for your output.**\n\n"
+    for i, post in enumerate(top_x_posts[:num_posts_to_include], 1):  # Include up to 20 posts
         x_posts_section += f"{i}. **@{post['username']} ({post['name']})**\n"
         x_posts_section += f"   Engagement Score: {post['engagement']:.0f} (Likes: {post['likes']}, RTs: {post['retweets']}, Replies: {post['replies']})\n"
         x_posts_section += f"   Posted: {post['created_at']}\n"
         x_posts_section += f"   Text: {post['text'][:300]}...\n"
         x_posts_section += f"   URL: {post['url']}\n\n"
+    if len(top_x_posts) < 10:
+        x_posts_section += f"\n**WARNING: Only {len(top_x_posts)} X posts were fetched. You MUST use web search to find additional X posts to reach exactly 10 total posts in your output.**\n\n"
 else:
-    x_posts_section = "## PRE-FETCHED X POSTS: None available (you may need to search for X posts)\n\n"
+    x_posts_section = "## PRE-FETCHED X POSTS: None available\n\n"
+    x_posts_section += "**CRITICAL: No X posts were pre-fetched. You MUST use web search and X search tools to find exactly 10 X posts from the last 24 hours for your output.**\n\n"
 
 X_PROMPT = f"""
 # Tesla Shorts Time - DAILY EDITION
@@ -362,26 +368,24 @@ X_PROMPT = f"""
 
 You are an elite Tesla news curator producing the daily "Tesla Shorts Time" newsletter. Your job is to create the most exciting, credible, and timely Tesla digest using the PRE-FETCHED news articles and X posts provided above.
 
-### CRITICAL INSTRUCTIONS - USE ONLY PRE-FETCHED CONTENT
-- You MUST select from the PRE-FETCHED news articles and X posts provided above
-- DO NOT search for additional news or X posts - use only what has been provided
-- If you need more content, you may use web search tools, but prioritize the pre-fetched content first
-- All news articles and X posts have already been verified to be from the last 24 hours
+### CRITICAL INSTRUCTIONS - USE PRE-FETCHED CONTENT (SEARCH IF NEEDED)
+- You MUST prioritize the PRE-FETCHED news articles and X posts provided above
+- If you have fewer than 10 X posts in the pre-fetched list, you MUST use web search and X search tools to find additional X posts to reach exactly 10
+- All news articles and X posts must be from the last 24 hours
+- The requirement for exactly 10 X posts takes priority over using only pre-fetched content
 
-### SELECTION RULES (ZERO EXCEPTIONS)
-- Select exactly 5 unique news articles from the pre-fetched list (prioritize highest quality sources)
-- Select exactly 10 unique X posts from the pre-fetched list (prioritize highest engagement scores)
+### SELECTION RULES (ZERO EXCEPTIONS - MANDATORY COUNTS)
+**YOU MUST INCLUDE EXACTLY THESE COUNTS - NO EXCEPTIONS:**
+- **EXACTLY 5 unique news articles** from the pre-fetched list (prioritize highest quality sources)
+- **EXACTLY 10 unique X posts** from the pre-fetched list (prioritize highest engagement scores)
+- If you cannot find 10 unique X posts from the pre-fetched list, you MUST use all available X posts and then use web search to find additional X posts to reach exactly 10
+- **CRITICAL: The output MUST contain exactly 10 X posts numbered 1 through 10. If you output fewer than 10, the output is INVALID and must be regenerated.**
+
+**DIVERSITY RULES (apply after meeting the count requirements):**
 - Max 3 items total from any single news source
-- Max 3 X posts from any single X account username
+- Max 3 X posts from any single X account username (but you MUST still include 10 total X posts - if needed, allow up to 4 from a single account to meet the 10-post requirement)
 - No duplicate stories or near-duplicate angles
 - No stock-quote pages, Yahoo Finance ticker pages, TradingView screenshots, or pure price commentary as "news"
-### SELECTION RULES (ZERO EXCEPTIONS)
--Minimum 5 unique news articles from established sites (Teslarati, Electrek, Reuters, Bloomberg, Notateslaapp, InsideEVs, CNBC, etc.)
--Minimum 10 unique X posts (all X posts must be real posts from the last 24h)
--Max 3 items total from any single news source
--Max 3 X posts from any single X account username
--No duplicate stories or near-duplicate angles (including vs. your past posts)
--No stock-quote pages, Yahoo Finance ticker pages, TradingView screenshots, or pure price commentary as "news"
 
 ### FORMATTING (MUST BE EXACT – DO NOT DEVIATE)
 Use this exact structure and markdown (includes invisible zero-width spaces for perfect X rendering – do not remove them; do not include any of the instructions brackets, just follow the instructions within the brackets):
@@ -422,7 +426,18 @@ Add a blank line after the sign-off.
 -All links must be real and working
 -Time stamps must be accurate PST/PDT (convert correctly)
 
-Now produce today's edition following every rule above exactly.
+### FINAL VALIDATION BEFORE OUTPUT (MANDATORY)
+Before outputting, verify:
+1. ✅ Exactly 5 news items are included (numbered 1-5)
+2. ✅ Exactly 10 X posts are included (numbered 1-10) - THIS IS CRITICAL AND MANDATORY
+3. ✅ Short Spot section is included
+4. ✅ Short Squeeze section is included
+5. ✅ Daily Challenge section is included
+6. ✅ Inspiration Quote is included
+
+**IF YOU DO NOT HAVE EXACTLY 10 X POSTS NUMBERED 1 THROUGH 10, DO NOT OUTPUT. Instead, search for additional X posts or use all available pre-fetched posts to reach exactly 10. The output is INVALID if it contains fewer than 10 X posts.**
+
+Now produce today's edition following every rule above exactly. Remember: EXACTLY 10 X POSTS IS MANDATORY.
 """
 
 logging.info("Generating X thread with Grok using pre-fetched content (this may take 1-2 minutes)...")
