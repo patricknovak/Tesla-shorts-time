@@ -385,12 +385,13 @@
                 <div class="twitter-header">
                     <h2>🐦 Latest Posts from @teslashortstime</h2>
                 </div>
-                <div class="twitter-timeline-container">
+                <div class="twitter-timeline-container" id="twitter-timeline-container">
                     <a class="twitter-timeline" 
                        data-theme="light" 
                        data-tweet-limit="5" 
                        data-chrome="noheader nofooter noscrollbar" 
                        data-width="360"
+                       data-height="500"
                        href="https://twitter.com/teslashortstime?ref_src=twsrc%5Etfw">
                        Posts by teslashortstime
                     </a>
@@ -407,60 +408,85 @@
         // Parse RSS feed
         async function loadPodcast() {
             try {
+                console.log('Loading RSS feed from:', RSS_FEED_URL);
                 const response = await fetch(RSS_FEED_URL);
-                if (!response.ok) throw new Error('Failed to load RSS feed');
+                if (!response.ok) throw new Error(`Failed to load RSS feed: ${response.status}`);
                 
                 const xmlText = await response.text();
+                console.log('RSS feed loaded, length:', xmlText.length);
+                
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
                 
                 // Check for parsing errors
                 const parserError = xmlDoc.querySelector('parsererror');
                 if (parserError) {
+                    console.error('RSS parsing error:', parserError.textContent);
                     throw new Error('Failed to parse RSS feed');
                 }
                 
-                const items = xmlDoc.querySelectorAll('item');
-                const episodes = [];
+                // Handle namespaces properly
+                const items = xmlDoc.getElementsByTagName('item');
+                console.log('Found items:', items.length);
                 
-                items.forEach(item => {
-                    const title = item.querySelector('title')?.textContent || 'Untitled';
-                    const description = item.querySelector('description')?.textContent || '';
-                    const pubDate = item.querySelector('pubDate')?.textContent || '';
-                    const enclosure = item.querySelector('enclosure');
+                const episodes = [];
+                const itunesNS = 'http://www.itunes.com/dtds/podcast-1.0.dtd';
+                
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    
+                    const title = item.getElementsByTagName('title')[0]?.textContent || 'Untitled';
+                    const description = item.getElementsByTagName('description')[0]?.textContent || '';
+                    const pubDate = item.getElementsByTagName('pubDate')[0]?.textContent || '';
+                    const enclosure = item.getElementsByTagName('enclosure')[0];
                     const audioUrl = enclosure?.getAttribute('url') || '';
                     
-                    // Try multiple ways to get duration (handle namespaces)
+                    // Get duration from itunes namespace
                     let duration = '';
-                    const durationEl = item.querySelector('itunes\\:duration') || 
-                                     item.querySelector('duration') ||
-                                     item.getElementsByTagNameNS('http://www.itunes.com/dtds/podcast-1.0.dtd', 'duration')[0];
+                    const durationEl = item.getElementsByTagNameNS(itunesNS, 'duration')[0];
                     if (durationEl) {
                         duration = durationEl.textContent || '';
                     }
                     
-                    episodes.push({
-                        title,
-                        description: description.replace(/<[^>]*>/g, '').substring(0, 200) + '...',
-                        pubDate: formatDate(pubDate),
-                        pubDateRaw: pubDate, // Keep raw date for sorting
-                        audioUrl,
-                        duration
-                    });
-                });
+                    if (audioUrl) {
+                        episodes.push({
+                            title,
+                            description: description.replace(/<[^>]*>/g, '').substring(0, 200) + '...',
+                            pubDate: formatDate(pubDate),
+                            pubDateRaw: pubDate,
+                            audioUrl,
+                            duration
+                        });
+                    }
+                }
                 
-                // Sort episodes by date (newest first) - RSS feeds are usually already sorted, but ensure it
+                console.log('Parsed episodes:', episodes.length);
+                
+                // Sort episodes by date (newest first)
                 episodes.sort((a, b) => {
                     const dateA = new Date(a.pubDateRaw || 0);
                     const dateB = new Date(b.pubDateRaw || 0);
                     return dateB - dateA;
                 });
                 
+                if (episodes.length === 0) {
+                    console.warn('No episodes found in RSS feed');
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('error').style.display = 'block';
+                    document.getElementById('error').textContent = 'No episodes found in RSS feed';
+                    return;
+                }
+                
                 displayEpisodes(episodes);
             } catch (error) {
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('error').style.display = 'block';
-                document.getElementById('error').textContent = `Error loading podcast: ${error.message}`;
+                console.error('Error loading podcast:', error);
+                const loadingEl = document.getElementById('loading');
+                const errorEl = document.getElementById('error');
+                if (loadingEl) loadingEl.style.display = 'none';
+                if (errorEl) {
+                    errorEl.style.display = 'block';
+                    errorEl.textContent = `Error loading podcast: ${error.message}`;
+                }
             }
         }
         
@@ -690,37 +716,52 @@
         
         // Initialize Twitter timeline widget
         (function() {
-            if (window.twttr && window.twttr.widgets) {
-                window.twttr.widgets.load();
-                return;
+            // Load Twitter widgets script
+            if (!document.getElementById('twitter-wjs')) {
+                var script = document.createElement('script');
+                script.id = 'twitter-wjs';
+                script.src = 'https://platform.twitter.com/widgets.js';
+                script.async = true;
+                script.charset = 'utf-8';
+                document.head.appendChild(script);
+                
+                console.log('Twitter widgets script loaded');
             }
             
-            window.twttr = (function(d, s, id) {
-                var js, fjs = d.getElementsByTagName(s)[0],
-                    t = window.twttr || {};
-                if (d.getElementById(id)) return t;
-                js = d.createElement(s);
-                js.id = id;
-                js.src = "https://platform.twitter.com/widgets.js";
-                js.async = true;
-                fjs.parentNode.insertBefore(js, fjs);
-                
-                t._e = [];
-                t.ready = function(f) {
-                    t._e.push(f);
-                };
-                
-                return t;
-            }(document, "script", "twitter-wjs"));
+            // Initialize twttr object if it doesn't exist
+            window.twttr = window.twttr || {};
+            window.twttr._e = window.twttr._e || [];
+            window.twttr.ready = window.twttr.ready || function(f) {
+                window.twttr._e.push(f);
+            };
             
-            // Wait for Twitter widgets to load, then render timeline
-            if (window.twttr && window.twttr.ready) {
-                window.twttr.ready(function() {
-                    if (window.twttr && window.twttr.widgets) {
-                        window.twttr.widgets.load();
-                    }
+            // Wait for script to load and then render widgets
+            function initTwitterWidgets() {
+                if (window.twttr && window.twttr.widgets) {
+                    console.log('Loading Twitter widgets...');
+                    window.twttr.widgets.load(document.getElementById('twitter-timeline-container'));
+                } else {
+                    // Retry after a short delay
+                    setTimeout(initTwitterWidgets, 500);
+                }
+            }
+            
+            // Start initialization
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    setTimeout(initTwitterWidgets, 1000);
                 });
+            } else {
+                setTimeout(initTwitterWidgets, 1000);
             }
+            
+            // Also listen for Twitter script load
+            window.twttr.ready(function() {
+                console.log('Twitter widgets ready');
+                if (window.twttr && window.twttr.widgets) {
+                    window.twttr.widgets.load(document.getElementById('twitter-timeline-container'));
+                }
+            });
         })();
     </script>
 </body>
