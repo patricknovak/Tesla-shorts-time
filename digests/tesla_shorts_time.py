@@ -828,83 +828,83 @@ Patrick: That’s Tesla Shorts Time Daily for today. I look forward to hearing y
 Now, here is today’s complete Tesla Shorts Time Daily markdown digest. Using ONLY that content, write the full script exactly as specified above.
 """
 
-logging.info("Generating podcast script with Grok (this may take 1-2 minutes)...")
-try:
-    podcast_script = client.chat.completions.create(
-        model="grok-4-1-fast-reasoning",
-        messages=[
-            {"role": "system", "content": "You are the world's best Tesla podcast writer. Make it feel like two real Canadian friends losing their minds (in a good way) over real Tesla news."},
-            {"role": "user", "content": f"Here is today's exact X thread/digest (use ONLY these facts):\n\n{x_thread}\n\n{POD_PROMPT}"}
-        ],
-        temperature=0.9,  # higher = more natural energy
-        max_tokens=4000
-    ).choices[0].message.content.strip()
-except Exception as e:
-    logging.error(f"Grok API call for podcast script failed: {e}")
-    logging.error("This might be due to network issues or API timeout. Please try again.")
-    raise
-
-# Save transcript
-transcript_path = digests_dir / f"podcast_transcript_{datetime.date.today():%Y%m%d}.txt"
-with open(transcript_path, "w", encoding="utf-8") as f:
-    f.write(f"# Tesla Shorts Time – The Pod | Ep {episode_num} | {today_str}\n\n{podcast_script}")
-logging.info("Natural podcast script generated – Patrick starts, super enthusiastic")
-
-# ========================== 3. ELEVENLABS TTS + COLLECT AUDIO FILES ==========================
-PATRICK_VOICE_ID = "dTrBzPvD2GpAqkk1MUzA"    # High-energy Patrick
-
-def speak(text: str, voice_id: str, filename: str):
-    url = f"{ELEVEN_API}/text-to-speech/{voice_id}/stream"
-    headers = {"xi-api-key": ELEVEN_KEY}
-    payload = {
-        "text": text + "!",  # extra excitement
-        "model_id": "eleven_turbo_v2_5",
-        "voice_settings": {
-            "stability": 0.65,
-            "similarity_boost": 0.9,
-            "style": 0.85,
-            "use_speaker_boost": True
-        }
-    }
-    r = requests.post(url, json=payload, headers=headers, stream=True, timeout=60)
-    r.raise_for_status()
-    with open(filename, "wb") as f:
-        for chunk in r.iter_content(chunk_size=8192):
-            f.write(chunk)
-
-
-def get_audio_duration(path: Path) -> float:
-    """Return duration in seconds for an audio file."""
+    logging.info("Generating podcast script with Grok (this may take 1-2 minutes)...")
     try:
-        result = subprocess.run(
-            [
-                "ffprobe",
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                str(path),
+        podcast_script = client.chat.completions.create(
+            model="grok-4-1-fast-reasoning",
+            messages=[
+                {"role": "system", "content": "You are the world's best Tesla podcast writer. Make it feel like two real Canadian friends losing their minds (in a good way) over real Tesla news."},
+                {"role": "user", "content": f"Here is today's exact X thread/digest (use ONLY these facts):\n\n{x_thread}\n\n{POD_PROMPT}"}
             ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return float(result.stdout.strip())
-    except Exception as exc:
-        logging.warning(f"Unable to determine duration for {path}: {exc}")
-        return 0.0
+            temperature=0.9,  # higher = more natural energy
+            max_tokens=4000
+        ).choices[0].message.content.strip()
+    except Exception as e:
+        logging.error(f"Grok API call for podcast script failed: {e}")
+        logging.error("This might be due to network issues or API timeout. Please try again.")
+        raise
+
+    # Save transcript
+    transcript_path = digests_dir / f"podcast_transcript_{datetime.date.today():%Y%m%d}.txt"
+    with open(transcript_path, "w", encoding="utf-8") as f:
+        f.write(f"# Tesla Shorts Time – The Pod | Ep {episode_num} | {today_str}\n\n{podcast_script}")
+    logging.info("Natural podcast script generated – Patrick starts, super enthusiastic")
+
+    # ========================== 3. ELEVENLABS TTS + COLLECT AUDIO FILES ==========================
+    PATRICK_VOICE_ID = "dTrBzPvD2GpAqkk1MUzA"    # High-energy Patrick
+
+    def speak(text: str, voice_id: str, filename: str):
+        url = f"{ELEVEN_API}/text-to-speech/{voice_id}/stream"
+        headers = {"xi-api-key": ELEVEN_KEY}
+        payload = {
+            "text": text + "!",  # extra excitement
+            "model_id": "eleven_turbo_v2_5",
+            "voice_settings": {
+                "stability": 0.65,
+                "similarity_boost": 0.9,
+                "style": 0.85,
+                "use_speaker_boost": True
+            }
+        }
+        r = requests.post(url, json=payload, headers=headers, stream=True, timeout=60)
+        r.raise_for_status()
+        with open(filename, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
 
 
-def format_duration(seconds: float) -> str:
-    """Format duration in seconds to HH:MM:SS or MM:SS format."""
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    secs = int(seconds % 60)
-    if hours > 0:
-        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
-    return f"{minutes:02d}:{secs:02d}"
+    def get_audio_duration(path: Path) -> float:
+        """Return duration in seconds for an audio file."""
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "default=noprint_wrappers=1:nokey=1",
+                    str(path),
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return float(result.stdout.strip())
+        except Exception as exc:
+            logging.warning(f"Unable to determine duration for {path}: {exc}")
+            return 0.0
+
+
+    def format_duration(seconds: float) -> str:
+        """Format duration in seconds to HH:MM:SS or MM:SS format."""
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        if hours > 0:
+            return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+        return f"{minutes:02d}:{secs:02d}"
 
 
 def update_rss_feed(
