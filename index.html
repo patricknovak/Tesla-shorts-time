@@ -409,7 +409,9 @@
         async function loadPodcast() {
             try {
                 console.log('Loading RSS feed from:', RSS_FEED_URL);
-                const response = await fetch(RSS_FEED_URL);
+                // Use CORS proxy to avoid CORS issues
+                const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                const response = await fetch(proxyUrl + encodeURIComponent(RSS_FEED_URL));
                 if (!response.ok) throw new Error(`Failed to load RSS feed: ${response.status}`);
                 
                 const xmlText = await response.text();
@@ -716,6 +718,27 @@
         
         // Initialize Twitter timeline widget
         (function() {
+            function initTwitterWidgets() {
+                const container = document.getElementById('twitter-timeline-container');
+                if (!container) {
+                    console.warn('Twitter timeline container not found');
+                    return;
+                }
+                
+                if (window.twttr && window.twttr.widgets) {
+                    console.log('Loading Twitter widgets...');
+                    try {
+                        window.twttr.widgets.load(container);
+                        console.log('Twitter widgets load called');
+                    } catch (e) {
+                        console.error('Error loading Twitter widgets:', e);
+                    }
+                } else {
+                    console.log('Twitter widgets not ready yet, retrying...');
+                    setTimeout(initTwitterWidgets, 500);
+                }
+            }
+            
             // Load Twitter widgets script
             if (!document.getElementById('twitter-wjs')) {
                 var script = document.createElement('script');
@@ -723,45 +746,43 @@
                 script.src = 'https://platform.twitter.com/widgets.js';
                 script.async = true;
                 script.charset = 'utf-8';
-                document.head.appendChild(script);
                 
-                console.log('Twitter widgets script loaded');
-            }
-            
-            // Initialize twttr object if it doesn't exist
-            window.twttr = window.twttr || {};
-            window.twttr._e = window.twttr._e || [];
-            window.twttr.ready = window.twttr.ready || function(f) {
-                window.twttr._e.push(f);
-            };
-            
-            // Wait for script to load and then render widgets
-            function initTwitterWidgets() {
-                if (window.twttr && window.twttr.widgets) {
-                    console.log('Loading Twitter widgets...');
-                    window.twttr.widgets.load(document.getElementById('twitter-timeline-container'));
-                } else {
-                    // Retry after a short delay
-                    setTimeout(initTwitterWidgets, 500);
-                }
-            }
-            
-            // Start initialization
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', function() {
+                script.onload = function() {
+                    console.log('Twitter widgets script loaded');
+                    // Initialize twttr object
+                    window.twttr = window.twttr || {};
+                    window.twttr._e = window.twttr._e || [];
+                    window.twttr.ready = window.twttr.ready || function(f) {
+                        window.twttr._e.push(f);
+                    };
+                    
+                    // Wait a bit for widgets to be available
                     setTimeout(initTwitterWidgets, 1000);
-                });
+                };
+                
+                script.onerror = function() {
+                    console.error('Failed to load Twitter widgets script');
+                };
+                
+                document.head.appendChild(script);
             } else {
-                setTimeout(initTwitterWidgets, 1000);
+                // Script already exists, try to initialize
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', function() {
+                        setTimeout(initTwitterWidgets, 2000);
+                    });
+                } else {
+                    setTimeout(initTwitterWidgets, 2000);
+                }
             }
             
-            // Also listen for Twitter script load
-            window.twttr.ready(function() {
-                console.log('Twitter widgets ready');
-                if (window.twttr && window.twttr.widgets) {
-                    window.twttr.widgets.load(document.getElementById('twitter-timeline-container'));
-                }
-            });
+            // Also use the ready callback if available
+            if (window.twttr && window.twttr.ready) {
+                window.twttr.ready(function() {
+                    console.log('Twitter widgets ready callback fired');
+                    setTimeout(initTwitterWidgets, 500);
+                });
+            }
         })();
     </script>
 </body>
