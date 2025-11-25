@@ -1008,17 +1008,77 @@ def update_rss_feed(
     # Check if episode already exists (by GUID)
     episode_guid = f"tesla-shorts-time-ep{episode_num:03d}-{episode_date:%Y%m%d}"
     existing_items = channel.findall("item")
+    episode_exists = False
     for item in existing_items:
         guid_elem = item.find("guid")
         if guid_elem is not None and guid_elem.text == episode_guid:
-            logging.info(f"Episode {episode_num} already in RSS feed, skipping")
+            logging.info(f"Episode {episode_num} already in RSS feed, updating existing entry")
+            episode_exists = True
+            # Update existing episode with latest information
+            # Update title
+            title_elem = item.find("title")
+            if title_elem is not None:
+                title_elem.text = episode_title
+            # Update description
+            desc_elem = item.find("description")
+            if desc_elem is not None:
+                desc_elem.text = html.escape(episode_description)
+            # Update enclosure URL and size
+            enclosure = item.find("enclosure")
+            if enclosure is not None:
+                mp3_url = f"{base_url}/digests/digests/{mp3_filename}"
+                enclosure.set("url", mp3_url)
+                mp3_size = mp3_path.stat().st_size if mp3_path.exists() else 0
+                enclosure.set("length", str(mp3_size))
+            # Update itunes:title
+            itunes_title = item.find("itunes:title")
+            if itunes_title is not None:
+                itunes_title.text = episode_title
+            # Update itunes:summary
+            itunes_summary = item.find("itunes:summary")
+            if itunes_summary is not None:
+                itunes_summary.text = episode_description
+            # Update duration
+            itunes_duration = item.find("itunes:duration")
+            if itunes_duration is not None:
+                itunes_duration.text = format_duration(mp3_duration)
             # Ensure existing episode has image tag
             existing_item_image = item.find("itunes:image")
             if existing_item_image is None:
                 item_image = ET.SubElement(item, "itunes:image")
                 item_image.set("href", f"{base_url}/podcast-image.jpg")
                 logging.info(f"Added itunes:image to existing episode {episode_num}")
+            # Update lastBuildDate even if episode exists
+            last_build_elem = channel.find("lastBuildDate")
+            if last_build_elem is not None:
+                last_build_elem.text = datetime.datetime.now(datetime.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
+            # Write the updated RSS feed
+            try:
+                tree = ET.ElementTree(root)
+                ET.indent(tree, space="  ")
+                with open(rss_path, "wb") as f:
+                    f.write('<?xml version="1.0" encoding="UTF-8"?>\n'.encode('utf-8'))
+                    tree.write(f, encoding="utf-8", xml_declaration=False)
+                # Post-process to fix namespace prefixes
+                with open(rss_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                content = content.replace('xmlns:ns0="http://www.itunes.com/dtds/podcast-1.0.dtd"', 'xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"')
+                content = content.replace('xmlns:ns1="http://purl.org/rss/1.0/modules/content/"', 'xmlns:content="http://purl.org/rss/1.0/modules/content/"')
+                content = content.replace('<ns0:', '<itunes:')
+                content = content.replace('</ns0:', '</itunes:')
+                content = content.replace('<ns1:', '<content:')
+                content = content.replace('</ns1:', '</content:')
+                with open(rss_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                logging.info(f"RSS feed updated (existing episode) → {rss_path}")
+                logging.info(f"RSS feed contains {len(channel.findall('item'))} episode(s)")
+            except Exception as e:
+                logging.error(f"Failed to write RSS feed to {rss_path}: {e}", exc_info=True)
+                raise
             return
+    
+    if episode_exists:
+        return
     
     # Create new episode item
     item = ET.SubElement(channel, "item")
