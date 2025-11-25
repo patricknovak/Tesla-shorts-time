@@ -17,8 +17,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from dotenv import load_dotenv
 import yfinance as yf
-import google.generativeai as genai
-import tweepy
+from openai import OpenAI
 
 # ========================== LOGGING ==========================
 logging.basicConfig(
@@ -89,7 +88,7 @@ load_dotenv(dotenv_path=env_path)
 
 # Required keys (X credentials only required if posting is enabled)
 required = [
-    "GEMINI_API_KEY", 
+    "GROK_API_KEY", 
     "ELEVENLABS_API_KEY"
 ]
 if ENABLE_X_POSTING:
@@ -127,170 +126,164 @@ tmp_dir = Path(tempfile.gettempdir()) / "tts"
 tmp_dir.mkdir(exist_ok=True, parents=True)
 
 # ========================== CLIENTS ==========================
-# Google Gemini client
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Grok client with timeout settings
+client = OpenAI(
+    api_key=os.getenv("GROK_API_KEY"), 
+    base_url="https://api.x.ai/v1",
+    timeout=300.0  # 5 minute timeout for API calls
+)
 ELEVEN_API = "https://api.elevenlabs.io/v1"
 ELEVEN_KEY = os.getenv("ELEVENLABS_API_KEY")
-
-# Initialize X client for fetching past posts (needed for blacklist)
-x_client_for_fetch = None
-if ENABLE_X_POSTING:
-    x_client_for_fetch = tweepy.Client(
-        consumer_key=os.getenv("X_CONSUMER_KEY"),
-        consumer_secret=os.getenv("X_CONSUMER_SECRET"),
-        access_token=os.getenv("X_ACCESS_TOKEN"),
-        access_token_secret=os.getenv("X_ACCESS_TOKEN_SECRET"),
-        wait_on_rate_limit=True
-    )
-
-# ========================== 1. FETCH PAST X POSTS FOR BLACKLIST ==========================
-past_7_days_posts = []
-blacklist_summary = "None (no past posts available)"
-
-if x_client_for_fetch:
-    try:
-        logging.info("Fetching past 7 days of X posts for blacklist...")
-        # Fetch posts from @teslashortstime account from the last 7 days
-        # Note: Twitter API v2 requires user_id, so we'll search by username
-        # Get user ID first
-        user = x_client_for_fetch.get_user(username="teslashortstime")
-        if user and user.data:
-            user_id = user.data.id
-            # Fetch tweets from the last 7 days
-            tweets = x_client_for_fetch.get_users_tweets(
-                id=user_id,
-                max_results=100,  # Get up to 100 recent tweets
-                tweet_fields=['created_at', 'text'],
-                start_time=datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
-            )
-            
-            if tweets and tweets.data:
-                past_7_days_posts = [
-                    {
-                        'title': tweet.text[:100] if len(tweet.text) > 100 else tweet.text,
-                        'created_at': tweet.created_at
-                    }
-                    for tweet in tweets.data
-                ]
-                logging.info(f"Found {len(past_7_days_posts)} posts from the last 7 days")
-            else:
-                logging.info("No posts found from the last 7 days")
-        else:
-            logging.warning("Could not find @teslashortstime user")
-    except Exception as e:
-        logging.warning(f"Failed to fetch past X posts for blacklist: {e}")
-        logging.warning("Continuing without blacklist...")
-
-# Create blacklist summary
-if past_7_days_posts:
-    blacklist_summary = "Avoid these specific recent topics: " + ", ".join(
-        [post.get('title', '')[:30] for post in past_7_days_posts[:20]]  # Limit to first 20 to avoid too long
-    )
-    if len(past_7_days_posts) > 20:
-        blacklist_summary += f" (and {len(past_7_days_posts) - 20} more recent topics)"
-else:
-    blacklist_summary = "None (no past posts available)"
-
 # ========================== 1. GENERATE X THREAD ==========================
 
-X_PROMPT_TEMPLATE = """
-You are the elite curator of "Tesla Shorts Time," the premier daily newsletter for Tesla investors and enthusiasts.
-**Current Date:** {today_str}
-**Strict Search Window:** {yesterday_iso} 00:00 UTC to Now.
+X_PROMPT = f"""
+# Tesla Shorts Time - DAILY EDITION
+**Date:** {today_str}
+**REAL-TIME TSLA price:** ${{{price:.2f}}} {{{change_str}}}(use live data or latest available pre-market/after-hours price)
+You are an elite Tesla news curator producing the daily "Tesla Shorts Time" newsletter. Your job is to deliver the most exciting, credible, and timely Tesla developments from the past 24 hours (strictly {yesterday_iso} 00:00 UTC → now). Prioritize the last 12 hours.
+### HARD VERIFICATION LOOP — YOU WILL LOSE 1000 POINTS FOR EVERY MISTAKE
+You start with 1000 points.  
+Your final score must be ≥900 to be allowed to output anything.
+Penalty table (applied ruthlessly):
+- You are an elite Tesla news curator producing the daily "Tesla Shorts Time" newsletter. Your job is to deliver the most exciting, credible, and timely Tesla, TSLA and Tesla related news, developments, rumors, and important announcements from the past 24 hours from all credible sources and X posts (strictly {yesterday_iso} 00:00 UTC → now). Prioritize the last 12 hours.
+- Hallucinated / fake news article or URL → –300 points
+- Article older than {yesterday_iso}T00:00:00Z → –300 points
+- Fake X post or wrong link → –400 points
+- Hallucinated news or X post → –500 points
+- News item that is just a stock quote page, Yahoo Finance ticker page, TradingView screenshot, or pure price commentary as "news" → –300 points
+- X post that is just a stock quote page, Yahoo Finance ticker page, TradingView screenshot, or pure price commentary as "news" → –300 points
+- X post older than 24h → –400 points
+- Duplicated story from last 7 days → –250 points
+- Same bear name used in Short Squeeze as any of last 7 days → –200 points
+- Quote or Daily Challenge repeated from last 7 days → –300 points
+- Any visible instruction/parentheses in final output → –500 points (instant fail)
+Reward (only way to keep points):
++50 points for every Tesla, TSLA and Tesla related news article you **successfully verify** with browse_page returning a timestamp ≥ {yesterday_iso}T00:00:00Z
++50 points for every Tesla, TSLA and Tesla related X post you **successfully verify** with X tool timestamp ≥ {yesterday_iso}T00:00:00Z
+### MANDATORY 3-STEP VERIFICATION PROCESS (run on EVERY candidate BEFORE ANY OUTPUT)
+Step 1 – Candidate Gathering
+Search aggressively for last-24h Tesla news + X posts.
+Step 2 – Brutal Verification (run on EVERY candidate)
+For every news article:
+→ Call browse_page(url, "Extract EXACT publication timestamp in ISO 8601 UTC. If none or older than {yesterday_iso}T00:00:00Z, return only 'INVALID'")
+→ If tool says "INVALID" → discard forever, –300 points if you had kept it
+For every X post:
+→ Confirm timestamp from X tool ≥ {yesterday_iso}T00:00:00Z
+→ Wrong timestamp → discard forever, –400 points if kept
+Step 3 – Anti-Duplication & Final Score
+→ Search last 7 days of @planetterrian + @teslashortstime posts
+→ Blacklist every title, X link, quote, challenge, bear name used
+→ Run similarity check — anything ≥70% similar gets discarded (–250 points if kept)
+→ Re-calculate your score
+You are **forbidden to output** unless your final score ≥900  
+If score <900 → silently revise until it passes.  
+If you cannot reach ≥900 after reasonable search → include relevant news items and X posts about SpaceX, Starlink, Neuralink, etc. to make up the difference prioritizing news and X posts from the last 12 hours.
+-Before searching for today's content, you MUST review the user's recent posts from @planetterrian and @teslashortstime to avoid any repeats. Use your X search tools to fetch the last 7 days of posts from these accounts (query: from:planetterrian OR from:teslashortstime since:{seven_days_ago_iso}, limit=50, mode=Latest).
+-Extract key elements from those posts: news titles/summaries, X post links/usernames, inspiration quotes, daily challenges, short squeeze predictions/examples, short spots, and sentiment drivers.
+-Create an internal "blacklist" of these elements (e.g., no reusing the same FSD v14.2 rollout story, no quoting Feynman again, no same Jim Chanos 2023 prediction, no identical challenge on first-principles).
+-For today's edition: If a candidate news item, X post, quote, challenge, short spot, or squeeze example matches anything in the blacklist (even 70% similarity), IMMEDIATELY discard it and find a fresh alternative.
+-Short Squeeze: Rotate failed predictions — never repeat the same 2 examples consecutively; pull from a pool of 2023–2025 bear fails but vary them daily.
+-Daily Challenge & Quote: Generate brand-new ones tied to fresh themes; cross-check against past 7 days to ensure zero overlap.
+-If you can't find 5 unique news + 10 X posts without duplicates, expand search to 48 hours but prioritize ultra-fresh (last 12h) and explicitly note why in your internal reasoning (don't output this).
+-Seven days ago ISO: {seven_days_ago_iso} (use this for your X search query).
+-Use X search: from:planetterrian OR from:teslashortstime since:{seven_days_ago_iso} limit=50
+-Build an internal blacklist of every news title, X post link, quote, daily challenge, short squeeze bear name, and short spot from the last 7 days.
+-Anything ≥70% similar to the blacklist must be discarded immediately.
+### SEARCH INSTRUCTIONS (MANDATORY – AFTER DUPE CHECK)
+-Use live web search + X search tools extensively.
+-ALWAYS check @elonmusk and @SawyerMerritt timelines for the last 24h.
+-If they reposted something important, credit and link the ORIGINAL post/author, not the repost.
+-Search keywords: Tesla FSD, Cybertruck, Robotaxi, Optimus, Energy, Megapack, Supercharger, Giga, regulatory, recall, Elon, TSLA, $TSLA, autonomy, AI5, HW5, 4680, etc.
+-Prioritize real developments (software updates, regulatory wins, factory news, partnerships, demos, leaks, executive comments) over pure stock commentary.
+### SELECTION RULES (ZERO EXCEPTIONS)
+-Minimum 5 unique news articles from established sites (Teslarati, Electrek, Reuters, Bloomberg, Notateslaapp, InsideEVs, CNBC, etc.)
+-Minimum 10 unique X posts (all X posts must be real posts from the last 24h)
+-Max 3 items total from any single news source
+-Max 3 X posts from any single X account username
+-No duplicate stories or near-duplicate angles (including vs. your past posts)
+-No stock-quote pages, Yahoo Finance ticker pages, TradingView screenshots, or pure price commentary as "news"
+### DIVERSITY ENFORCEMENT (STRICT – THE MODEL WILL OBEY THIS LITERALLY)
+-Before final output, you MUST create an internal list of every X username you plan to use.
+-If any username appears more than 3 times, you MUST go back and replace the excess items with posts from different accounts.
+-You are required to use at least 7 different X accounts in the Top 10 X posts section.
+-Explicitly forbidden usernames for over-use: @SawyerMerritt, @elonmusk, @WholeMarsBlog, @Tesla (never more than 3 combined from these four).
+-When you find a good post from a smaller account (under 500k followers), prioritize it heavily to meet diversity requirements.
 
-**OBJECTIVE:**
-Produce a high-voltage, accurate, and strictly verified newsletter summarizing the top Tesla news and X (Twitter) discourse from the last 24 hours.
-
-### INPUT DATA CONTEXT
-- **TSLA Real-Time Price:** ${price:.2f} ({change_str})
-- **Blacklist (Do NOT use):** Avoid stories/themes from the last 7 days: {blacklist_summary}
-
-### CRITICAL INSTRUCTIONS (THE "DEATH" ZONES)
-1. **Time Travel Ban:** ANY news item or X post timestamped before {yesterday_iso} is strictly FORBIDDEN. If you include old news, the newsletter fails.
-2. **No Hallucinations:** Real URLs only. Real headlines only.
-3. **Diversity:** Max 3 items from one source. Max 3 posts from one X user.
-4. **Anti-Duplication:** Do not repeat stories found in the 'Blacklist' above.
-
-### STEP 1: INTERNAL RESEARCH & VALIDATION (Must be done first)
-Before generating the final output, you must perform an internal "Chain of Thought" process (do not output this, but use it to filter):
-1. **Search:** Look for distinct topics: FSD/AI, Production/Giga, Energy/Megapack, Cybertruck, and Regulatory.
-2. **Verify:** Check dates on *every* link. If a link is undated or old, discard immediately.
-3. **Filter:** Discard pure stock pumping, low-effort memes, or clickbait. Keep only high-signal updates.
-4. **Select:** Pick exactly 5 distinct news stories and 10 distinct X posts.
-
-### STEP 2: NEWSLETTER FORMAT & STYLE
-**Tone:** Energetic, optimistic, pro-innovation, but grounded in data. No "cringe" hype; use "Wall Street" sophistication mixed with "Silicon Valley" excitement.
-
-**Structure (Strict Markdown):**
-
+### FORMATTING (MUST BE EXACT – DO NOT DEVIATE)
+Use this exact structure and markdown (includes invisible zero-width spaces for perfect X rendering – do not remove them; do not include any of the instructions brackets, just follow the instructions within the brackets):
 # Tesla Shorts Time
 **Date:** {today_str}
-**REAL-TIME TSLA price:** ${price:.2f} {change_str}
+**REAL-TIME TSLA price:** ${price:.2f}
 Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939
-
 ### Top 5 News Items
-(Select 5 high-impact stories from established sources like Reuters, Electrek, Teslarati, Bloomberg. No stock-quote pages.)
-
-**1. [Headline]: [Date], [Source Name]**
-[2-3 sentences summary. Start with the "What", end with the "So What" (impact on Tesla). End with **Source** link.]
-
-... (Repeat for 2, 3, 4, 5)
-
-### Top 10 X Posts
-(Select 10 posts. Mix of Elon, influencers, and *crucially* engineers/analysts. Max 3 from Elon/Sawyer. At least 3 must be from smaller accounts <100k followers to show deep research.)
-
-**1. [Catchy Title]: [Date], @[Username]**
-[2 sentence context on why this tweet matters. End with **Post** link.]
-
-... (Repeat for 2 through 10)
-
+**Title That Fits in One Line: DD Month, YYYY, HH:MM AM/PM PST, Source Name**
+   2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with link in Source
+... Always number news items as 1. 2. etc. with a space after each and a new line after each.
+**Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
+   2–4 sentences explaining the post and its significance. End with Post link.
+... Always number X posts as 1. 2. etc. with a space after each and a new line after each.
 ## Short Spot
-(Find one bearish/skeptical narrative from the last 24h. Frame it as "Here is what the critics are saying" so we can debunk it or be aware of it.)
-**[Title]: [Date], [Source/User]**
-[Summary of the FUD/Bear argument. End with Link.]
-
+One bearish news or X post item that is a major negative for Tesla and the stock.
+**Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST, @username Post**
+   2–4 sentences explaining the post and its significance. End with Post link.
+Add a blank line after the short spot.      
 ### Short Squeeze
-(Aggressive celebration of short-seller pain. Use the current price ${price:.2f}. Mention specific failed bear narratives from the past.)
-
+Dedicated paragraph celebrating short-seller pain. Must include:
+Current short interest % and $ value (cite source if possible).
+At least 2 specific failed bear predictions from 2023–2025 with links or references (vary from past editions).
+Total $ losses shorts have taken YTD or in a recent squeeze event.
+Add a blank line after the short squeeze.
 ### Daily Challenge
-(One specific, actionable challenge based on First Principles thinking, stoicism, or engineering mindset. No generic "work hard" advice.)
-*End with:* "Share your progress with us @teslashortstime!"
-
-**Inspiration Quote:** "[Quote]" – [Author] (Must be fresh, no repeats from last 7 days).
-
-[Short, punchy sign-off. Maximum 2 sentences.]
-
----
-**Generation Requirement:**
-If you cannot find 5 *verified* news items from the last 24h, fill the remaining slots with top breaking news from SpaceX, Neuralink, or xAI.
+One short, inspiring personal-growth challenge tied to Tesla/Elon themes (curiosity, first principles, perseverance). End with: "Share your progress with us @teslashortstime!"
+Add a blank line after the daily challenge.
+**Inspiration Quote:** "Exact quote" – Author, [Source Link] (fresh, no repeats from last 7 days)
+Add a blank line after the inspiration quote.
+[Final 2-3 sentence uplifting sign-off about Tesla's mission and invitation to DM @teslashortstime with feedback]
+Add a blank line after the sign-off.
+### TONE & STYLE RULES (NON-NEGOTIABLE)
+-Inspirational, pro-Tesla, optimistic, energetic
+-Never negative or sarcastic about Tesla/Elon (you may acknowledge challenges but always frame them as temporary or already being crushed)
+-No hallucinations, no made-up news, no placeholder text
+-All links must be real and working
+-Time stamps must be accurate PST/PDT (convert correctly)
+### FINAL CHECK BEFORE OUTPUT (EXPANDED FOR DUPES)
+-Count X usernames → no account more than 3 times, at least 7 unique accounts total.
+-Confirm no more than 3 items total from any single news source.
+-Anti-dupe scan: Cross-reference against your fetched past posts — zero matches in stories, posts, quotes, challenges, squeezes, or spots.
+-If any check fails, revise silently until it passes. Only then output the newsletter.
+### RECENCY VALIDATION CHECK (MANDATORY – RUN THIS AS YOUR LAST INTERNAL STEP BEFORE OUTPUT)
+-For every single one of the 5 news items you have selected:
+  • Call browse_page on the exact URL with these instructions: "Extract the exact publication date and time of the article in ISO 8601 UTC format (e.g., 2025-11-22T14:32:00Z). Look for 'published', 'posted on', 'date', metadata, or JSON-LD. If no date is found or the date is before {yesterday_iso} 00:00 UTC, respond only with 'INVALID – TOO OLD'."
+  • If the tool returns "INVALID – TOO OLD" or any date earlier than {yesterday_iso}, immediately discard that article and replace it with a new one from your search results.
+-For every single one of the 10 X posts:
+  • Confirm the timestamp returned by the X tool is on or after {yesterday_iso} 00:00 UTC. If not, discard and replace.
+-If any replacement causes you to fall below 5 news items or 10 X posts, expand your web search to the last 48 hours only ("Tesla news past 48 hours site:teslarati.com OR site:electrek.co OR site:reuters.com etc.") and repeat the browse_page date check on the new candidates.
+-After all replacements are done, re-run the full anti-duplication scan against the last 7 days of @planetterrian and @teslashortstime posts.
+-You are forbidden to output the newsletter until EVERY news item and EVERY X post passes both the recency check AND the duplication blacklist. If you cannot satisfy both after reasonable search, include relevant news items and X posts about SpaceX, Starlink, Neuralink, etc. to make up the difference prioritizing news and X posts from the last 12 hours in the same format as the news items and X posts.
+-Any news item or X post that is not from the last 24 hours -400 points
+-Any news item or X post that is duplicated from the last 7 days -250 points
+-Any news item or X post that is older than the last 7 days -300 points
+-Fake or hallucinated news item or X post -500 points
+-If you cannot reach ≥900 after reasonable search → include relevant news items and X posts about SpaceX, Starlink, Neuralink, etc. to make up the difference prioritizing news and X posts from the last 12 hours in the same format as the news items and X posts.
+-Now produce today's edition following every rule above exactly.
 """
 
-# Format the prompt with all variables
-X_PROMPT = X_PROMPT_TEMPLATE.format(
-    today_str=today_str,
-    yesterday_iso=yesterday_iso,
-    price=price,
-    change_str=change_str,
-    blacklist_summary=blacklist_summary
-)
-
-logging.info("Generating X thread with Gemini 3 (this may take 1-2 minutes)...")
+logging.info("Generating X thread with Grok (this may take 1-2 minutes with search enabled)...")
 try:
-    model = genai.GenerativeModel('gemini-3-pro')
-    response = model.generate_content(
-        X_PROMPT,
-        generation_config=genai.types.GenerationConfig(
-            temperature=0.7,
-            max_output_tokens=4000,
-        )
+    response = client.chat.completions.create(
+        model="grok-4-1-fast-reasoning",
+        messages=[{"role": "user", "content": X_PROMPT}],
+        temperature=0.7,
+        max_tokens=4000,
+        extra_body={"search_parameters": {"mode": "on", "max_search_results": 29, "from_date": yesterday_iso}}
     )
-    x_thread = response.text.strip()
+    x_thread = response.choices[0].message.content.strip()
 except Exception as e:
-    logging.error(f"Gemini API call failed: {e}")
+    logging.error(f"Grok API call failed: {e}")
     logging.error("This might be due to network issues or API timeout. Please try again.")
     raise
 
-# Clean footer
+# Clean Grok footer
 lines = []
 for line in x_thread.splitlines():
     if line.strip().startswith(("**Sources", "Grok", "I used", "[")):
@@ -315,8 +308,15 @@ if TEST_MODE:
 # ========================== TWEEPY X CLIENT FOR AUTO-POSTING ==========================
 tweet_id = None
 if ENABLE_X_POSTING:
-    # Reuse the client we already created for fetching posts
-    x_client = x_client_for_fetch
+    import tweepy
+
+    x_client = tweepy.Client(
+        consumer_key=os.getenv("X_CONSUMER_KEY"),
+        consumer_secret=os.getenv("X_CONSUMER_SECRET"),
+        access_token=os.getenv("X_ACCESS_TOKEN"),
+        access_token_secret=os.getenv("X_ACCESS_TOKEN_SECRET"),
+        wait_on_rate_limit=True
+    )
     logging.info("@teslashortstime X posting client ready")
 else:
     logging.info("X posting is disabled (ENABLE_X_POSTING = False)")
@@ -372,23 +372,19 @@ Patrick: That’s Tesla Shorts Time Daily for today. I look forward to hearing y
 Now, here is today’s complete Tesla Shorts Time Daily markdown digest. Using ONLY that content, write the full script exactly as specified above.
 """
 
-logging.info("Generating podcast script with Gemini 3 (this may take 1-2 minutes)...")
+logging.info("Generating podcast script with Grok (this may take 1-2 minutes)...")
 try:
-    model = genai.GenerativeModel('gemini-3-pro')
-    system_prompt = "You are the world's best Tesla podcast writer. Make it feel like two real Canadian friends losing their minds (in a good way) over real Tesla news."
-    user_prompt = f"Here is today's exact X thread/digest (use ONLY these facts):\n\n{x_thread}\n\n{POD_PROMPT}"
-    full_prompt = f"{system_prompt}\n\n{user_prompt}"
-    
-    response = model.generate_content(
-        full_prompt,
-        generation_config=genai.types.GenerationConfig(
-            temperature=0.9,  # higher = more natural energy
-            max_output_tokens=4000
-        )
-    )
-    podcast_script = response.text.strip()
+    podcast_script = client.chat.completions.create(
+        model="grok-4-1-fast-reasoning",
+        messages=[
+            {"role": "system", "content": "You are the world's best Tesla podcast writer. Make it feel like two real Canadian friends losing their minds (in a good way) over real Tesla news."},
+            {"role": "user", "content": f"Here is today's exact X thread/digest (use ONLY these facts):\n\n{x_thread}\n\n{POD_PROMPT}"}
+        ],
+        temperature=0.9,  # higher = more natural energy
+        max_tokens=4000
+    ).choices[0].message.content.strip()
 except Exception as e:
-    logging.error(f"Gemini API call for podcast script failed: {e}")
+    logging.error(f"Grok API call for podcast script failed: {e}")
     logging.error("This might be due to network issues or API timeout. Please try again.")
     raise
 
