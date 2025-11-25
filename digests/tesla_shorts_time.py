@@ -149,6 +149,9 @@ Penalty table (applied ruthlessly):
 - Hallucinated / fake news article or URL → –300 points
 - Article older than {yesterday_iso}T00:00:00Z → –300 points
 - Fake X post or wrong link → –400 points
+- Hallucinated news or X post → –500 points
+- News item that is just a stock quote page, Yahoo Finance ticker page, TradingView screenshot, or pure price commentary as "news" → –300 points
+- X post that is just a stock quote page, Yahoo Finance ticker page, TradingView screenshot, or pure price commentary as "news" → –300 points
 - X post older than 24h → –400 points
 - Duplicated story from last 7 days → –250 points
 - Same bear name used in Short Squeeze as any of last 7 days → –200 points
@@ -205,6 +208,7 @@ If you cannot reach ≥900 after reasonable search → include relevant news ite
 -You are required to use at least 7 different X accounts in the Top 10 X posts section.
 -Explicitly forbidden usernames for over-use: @SawyerMerritt, @elonmusk, @WholeMarsBlog, @Tesla (never more than 3 combined from these four).
 -When you find a good post from a smaller account (under 500k followers), prioritize it heavily to meet diversity requirements.
+
 ### FORMATTING (MUST BE EXACT – DO NOT DEVIATE)
 Use this exact structure and markdown (includes invisible zero-width spaces for perfect X rendering – do not remove them; do not include any of the instructions brackets, just follow the instructions within the brackets):
 # Tesla Shorts Time
@@ -214,23 +218,28 @@ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesl
 ### Top 5 News Items
 **Title That Fits in One Line: DD Month, YYYY, HH:MM AM/PM PST, Source Name**
    2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with link in Source
-... Always number news items as 1. 2. etc. with a space after each.
+... Always number news items as 1. 2. etc. with a space after each and a new line after each.
 **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
    2–4 sentences explaining the post and its significance. End with Post link.
-... Always number X posts as 1. 2. etc. with a space after each.
+... Always number X posts as 1. 2. etc. with a space after each and a new line after each.
 ## Short Spot
 One bearish news or X post item that is a major negative for Tesla and the stock.
 **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST, @username Post**
    2–4 sentences explaining the post and its significance. End with Post link.
+Add a blank line after the short spot.      
 ### Short Squeeze
 Dedicated paragraph celebrating short-seller pain. Must include:
-Current short interest % and $ value (cite source if possible)
-At least 2 specific failed bear predictions from 2023–2025 with links or references (vary from past editions)
-Total $ losses shorts have taken YTD or in a recent squeeze event
+Current short interest % and $ value (cite source if possible).
+At least 2 specific failed bear predictions from 2023–2025 with links or references (vary from past editions).
+Total $ losses shorts have taken YTD or in a recent squeeze event.
+Add a blank line after the short squeeze.
 ### Daily Challenge
 One short, inspiring personal-growth challenge tied to Tesla/Elon themes (curiosity, first principles, perseverance). End with: "Share your progress with us @teslashortstime!"
+Add a blank line after the daily challenge.
 **Inspiration Quote:** "Exact quote" – Author, [Source Link] (fresh, no repeats from last 7 days)
+Add a blank line after the inspiration quote.
 [Final 2-3 sentence uplifting sign-off about Tesla's mission and invitation to DM @teslashortstime with feedback]
+Add a blank line after the sign-off.
 ### TONE & STYLE RULES (NON-NEGOTIABLE)
 -Inspirational, pro-Tesla, optimistic, energetic
 -Never negative or sarcastic about Tesla/Elon (you may acknowledge challenges but always frame them as temporary or already being crushed)
@@ -250,14 +259,19 @@ One short, inspiring personal-growth challenge tied to Tesla/Elon themes (curios
   • Confirm the timestamp returned by the X tool is on or after {yesterday_iso} 00:00 UTC. If not, discard and replace.
 -If any replacement causes you to fall below 5 news items or 10 X posts, expand your web search to the last 48 hours only ("Tesla news past 48 hours site:teslarati.com OR site:electrek.co OR site:reuters.com etc.") and repeat the browse_page date check on the new candidates.
 -After all replacements are done, re-run the full anti-duplication scan against the last 7 days of @planetterrian and @teslashortstime posts.
--You are forbidden to output the newsletter until EVERY news item and EVERY X post passes both the recency check AND the duplication blacklist. If you cannot satisfy both after reasonable search, note it internally and output nothing rather than include old or duplicate content.
+-You are forbidden to output the newsletter until EVERY news item and EVERY X post passes both the recency check AND the duplication blacklist. If you cannot satisfy both after reasonable search, include relevant news items and X posts about SpaceX, Starlink, Neuralink, etc. to make up the difference prioritizing news and X posts from the last 12 hours in the same format as the news items and X posts.
+-Any news item or X post that is not from the last 24 hours -400 points
+-Any news item or X post that is duplicated from the last 7 days -250 points
+-Any news item or X post that is older than the last 7 days -300 points
+-Fake or hallucinated news item or X post -500 points
+-If you cannot reach ≥900 after reasonable search → include relevant news items and X posts about SpaceX, Starlink, Neuralink, etc. to make up the difference prioritizing news and X posts from the last 12 hours in the same format as the news items and X posts.
 -Now produce today's edition following every rule above exactly.
 """
 
 logging.info("Generating X thread with Grok (this may take 1-2 minutes with search enabled)...")
 try:
     response = client.chat.completions.create(
-        model="grok-4",
+        model="grok-4-1-fast-reasoning",
         messages=[{"role": "user", "content": X_PROMPT}],
         temperature=0.7,
         max_tokens=4000,
@@ -330,12 +344,15 @@ You will receive the complete, final Tesla Shorts Time Daily markdown for {today
 - Quote the inspirational quote and Daily Challenge verbatim
 ### MANDATORY SCRIPT OUTLINE (follow exactly)
 [Intro music fades in for exactly 10 seconds — no text here]
-Patrick: Welcome to Tesla Shorts Time Daily, episode {episode_num} — it is (say today's date in the format of November 21, 2025) and I’m Patrick in Vancouver, Canada. TSLA is sitting at exactly {price:.2f} right now.
-Thank you for joining us today. Now straight to the daily news updates you are here for.
+Patrick: Welcome to Tesla Shorts Time Daily, episode {episode_num}
+It is (say today's date in the format of November 21, 2025).
+I’m Patrick in Vancouver, Canada. TSLA stock price is ${price:.2f} right now (enunciate the price clearly).
+Thank you for joining us today. If you like the show, please like, share, rate and subscribe to the podcast, it really helps.
+Now straight to the daily news updates you are here for.
 [Now narrate EVERY SINGLE ITEM from the digest in published order — no skipping]
 → For each of the 6 Top News Items:
    Patrick: [Read the bold title with excitement] → then paraphrase the 2–4 sentence summary in natural, rapid, hyped speech, hitting every key fact and why it matters
-→ For the 10 X posts (7–16):
+→ For the 10 X posts:
    Patrick: Over to the top X posts, read naturally each post — [read the catchy title with maximum hype and then paraphrase the post in excited spoken language while keeping every fact 100% accurate]
 → Short Squeeze section:
    Patrick: And now, it’s time for everyone’s favourite segment — the Short Squeeze! [paraphrase the entire paragraph with glee, calling out specific failed predictions, dollar losses, and laughing at how wrong the bears were]
@@ -358,7 +375,7 @@ Now, here is today’s complete Tesla Shorts Time Daily markdown digest. Using O
 logging.info("Generating podcast script with Grok (this may take 1-2 minutes)...")
 try:
     podcast_script = client.chat.completions.create(
-        model="grok-4",
+        model="grok-4-1-fast-reasoning",
         messages=[
             {"role": "system", "content": "You are the world's best Tesla podcast writer. Make it feel like two real Canadian friends losing their minds (in a good way) over real Tesla news."},
             {"role": "user", "content": f"Here is today's exact X thread/digest (use ONLY these facts):\n\n{x_thread}\n\n{POD_PROMPT}"}
