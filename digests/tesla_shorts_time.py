@@ -89,7 +89,8 @@ load_dotenv(dotenv_path=env_path)
 # Required keys (X credentials only required if posting is enabled)
 required = [
     "GROK_API_KEY", 
-    "ELEVENLABS_API_KEY"
+    "ELEVENLABS_API_KEY",
+    "NEWSAPI_KEY"  # For fetching Tesla news
 ]
 if ENABLE_X_POSTING:
     required.extend([
@@ -134,67 +135,246 @@ client = OpenAI(
 )
 ELEVEN_API = "https://api.elevenlabs.io/v1"
 ELEVEN_KEY = os.getenv("ELEVENLABS_API_KEY")
-# ========================== 1. GENERATE X THREAD ==========================
+NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
+
+# ========================== STEP 1: FETCH TESLA NEWS FROM NEWSAPI.ORG ==========================
+logging.info("Step 1: Fetching Tesla news from newsapi.org for the last 24 hours...")
+
+def fetch_tesla_news():
+    """Fetch Tesla-related news from newsapi.org for the last 24 hours."""
+    newsapi_url = "https://newsapi.org/v2/everything"
+    
+    # Calculate date range (last 24 hours)
+    from_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    to_date = datetime.datetime.now().strftime("%Y-%m-%d")
+    
+    params = {
+        "q": "Tesla OR TSLA OR Elon Musk",
+        "from": from_date,
+        "to": to_date,
+        "sortBy": "publishedAt",
+        "language": "en",
+        "pageSize": 50,  # Get up to 50 articles
+        "apiKey": NEWSAPI_KEY
+    }
+    
+    try:
+        response = requests.get(newsapi_url, params=params, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        
+        articles = data.get("articles", [])
+        logging.info(f"Fetched {len(articles)} articles from newsapi.org")
+        
+        # Filter and format articles
+        formatted_articles = []
+        for article in articles:
+            # Skip articles without required fields
+            if not article.get("title") or not article.get("url"):
+                continue
+            
+            # Skip articles that are just stock quotes or price commentary
+            title_lower = article.get("title", "").lower()
+            if any(skip_term in title_lower for skip_term in ["stock quote", "tradingview", "yahoo finance ticker", "price chart"]):
+                continue
+            
+            formatted_articles.append({
+                "title": article.get("title", ""),
+                "description": article.get("description", ""),
+                "url": article.get("url", ""),
+                "source": article.get("source", {}).get("name", "Unknown"),
+                "publishedAt": article.get("publishedAt", ""),
+                "author": article.get("author", "")
+            })
+        
+        logging.info(f"Filtered to {len(formatted_articles)} valid Tesla news articles")
+        return formatted_articles[:20]  # Return top 20 for selection
+        
+    except Exception as e:
+        logging.error(f"Failed to fetch news from newsapi.org: {e}")
+        logging.warning("Continuing without newsapi.org data - will rely on Grok search")
+        return []
+
+tesla_news = fetch_tesla_news()
+
+# ========================== STEP 2: FETCH TOP X POSTS FROM X API ==========================
+logging.info("Step 2: Fetching top X posts from the last 24 hours...")
+
+def fetch_top_x_posts():
+    """Fetch top X posts about Tesla from the last 24 hours, ranked by engagement."""
+    if not ENABLE_X_POSTING:
+        logging.warning("X posting disabled - cannot fetch X posts. Will rely on Grok search.")
+        return []
+    
+    import tweepy
+    
+    x_client = tweepy.Client(
+        consumer_key=os.getenv("X_CONSUMER_KEY"),
+        consumer_secret=os.getenv("X_CONSUMER_SECRET"),
+        access_token=os.getenv("X_ACCESS_TOKEN"),
+        access_token_secret=os.getenv("X_ACCESS_TOKEN_SECRET"),
+        wait_on_rate_limit=True
+    )
+    
+    # Calculate date range (last 24 hours)
+    since_time = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)).isoformat()
+    
+    # Search for Tesla-related posts
+    search_queries = [
+        "Tesla OR TSLA OR Elon Musk -is:retweet lang:en",
+        "$TSLA -is:retweet lang:en",
+        "Tesla FSD OR Cybertruck OR Robotaxi -is:retweet lang:en"
+    ]
+    
+    all_posts = []
+    
+    try:
+        for query in search_queries:
+            try:
+                # Search for tweets
+                tweets = x_client.search_recent_tweets(
+                    query=query,
+                    max_results=100,  # Get up to 100 per query
+                    tweet_fields=["created_at", "public_metrics", "author_id", "text"],
+                    user_fields=["username", "name"],
+                    expansions=["author_id"]
+                )
+                
+                if tweets.data:
+                    # Get user data
+                    if tweets.includes and hasattr(tweets.includes, 'users'):
+                        users = {user.id: user for user in tweets.includes.users}
+                    elif tweets.includes and isinstance(tweets.includes, dict):
+                        users = {user.id: user for user in tweets.includes.get("users", [])}
+                    else:
+                        users = {}
+                    
+                    for tweet in tweets.data:
+                        # Calculate engagement score (weighted)
+                        # Tweepy v4+ uses public_metrics as an object with attributes
+                        metrics = tweet.public_metrics if hasattr(tweet, 'public_metrics') else {}
+                        if hasattr(metrics, 'like_count'):
+                            # It's a metrics object
+                            like_count = getattr(metrics, 'like_count', 0)
+                            retweet_count = getattr(metrics, 'retweet_count', 0)
+                            reply_count = getattr(metrics, 'reply_count', 0)
+                            quote_count = getattr(metrics, 'quote_count', 0)
+                        else:
+                            # It's a dict
+                            like_count = metrics.get("like_count", 0) if isinstance(metrics, dict) else 0
+                            retweet_count = metrics.get("retweet_count", 0) if isinstance(metrics, dict) else 0
+                            reply_count = metrics.get("reply_count", 0) if isinstance(metrics, dict) else 0
+                            quote_count = metrics.get("quote_count", 0) if isinstance(metrics, dict) else 0
+                        
+                        engagement = (
+                            like_count * 1 +
+                            retweet_count * 2 +
+                            reply_count * 1.5 +
+                            quote_count * 2
+                        )
+                        
+                        # Get username
+                        author = users.get(tweet.author_id)
+                        username = author.username if author else "unknown"
+                        name = author.name if author else "Unknown"
+                        
+                        # Check if post is within last 24 hours
+                        tweet_time = tweet.created_at
+                        if tweet_time and (datetime.datetime.now(datetime.timezone.utc) - tweet_time).total_seconds() <= 86400:
+                            all_posts.append({
+                                "id": tweet.id,
+                                "text": tweet.text,
+                                "username": username,
+                                "name": name,
+                                "url": f"https://x.com/{username}/status/{tweet.id}",
+                                "created_at": tweet_time.isoformat(),
+                                "engagement": engagement,
+                                "likes": like_count,
+                                "retweets": retweet_count,
+                                "replies": reply_count
+                            })
+            except Exception as e:
+                logging.warning(f"Error searching with query '{query}': {e}")
+                continue
+        
+        # Sort by engagement and get top posts
+        all_posts.sort(key=lambda x: x["engagement"], reverse=True)
+        
+        # Remove duplicates (by tweet ID)
+        seen_ids = set()
+        unique_posts = []
+        for post in all_posts:
+            if post["id"] not in seen_ids:
+                seen_ids.add(post["id"])
+                unique_posts.append(post)
+        
+        # Get top 20 for selection
+        top_posts = unique_posts[:20]
+        logging.info(f"Fetched {len(top_posts)} top X posts (ranked by engagement)")
+        
+        return top_posts
+        
+    except Exception as e:
+        logging.error(f"Failed to fetch X posts: {e}")
+        logging.warning("Continuing without X API data - will rely on Grok search")
+        return []
+
+top_x_posts = fetch_top_x_posts()
+
+# ========================== STEP 3: GENERATE X THREAD WITH GROK ==========================
+logging.info("Step 3: Generating Tesla Shorts Time digest with Grok using pre-fetched news and X posts...")
+
+# Format news articles for the prompt
+news_section = ""
+if tesla_news:
+    news_section = "## PRE-FETCHED NEWS ARTICLES (from newsapi.org - last 24 hours):\n\n"
+    for i, article in enumerate(tesla_news[:15], 1):  # Top 15 articles
+        news_section += f"{i}. **{article['title']}**\n"
+        news_section += f"   Source: {article['source']}\n"
+        news_section += f"   Published: {article['publishedAt']}\n"
+        if article.get('description'):
+            news_section += f"   Description: {article['description'][:200]}...\n"
+        news_section += f"   URL: {article['url']}\n\n"
+else:
+    news_section = "## PRE-FETCHED NEWS ARTICLES: None available (you may need to search for news)\n\n"
+
+# Format X posts for the prompt
+x_posts_section = ""
+if top_x_posts:
+    x_posts_section = "## PRE-FETCHED X POSTS (from X API - last 24 hours, ranked by engagement):\n\n"
+    for i, post in enumerate(top_x_posts[:15], 1):  # Top 15 posts
+        x_posts_section += f"{i}. **@{post['username']} ({post['name']})**\n"
+        x_posts_section += f"   Engagement Score: {post['engagement']:.0f} (Likes: {post['likes']}, RTs: {post['retweets']}, Replies: {post['replies']})\n"
+        x_posts_section += f"   Posted: {post['created_at']}\n"
+        x_posts_section += f"   Text: {post['text'][:300]}...\n"
+        x_posts_section += f"   URL: {post['url']}\n\n"
+else:
+    x_posts_section = "## PRE-FETCHED X POSTS: None available (you may need to search for X posts)\n\n"
 
 X_PROMPT = f"""
 # Tesla Shorts Time - DAILY EDITION
 **Date:** {today_str}
-**REAL-TIME TSLA price:** ${{{price:.2f}}} {{{change_str}}}(use live data or latest available pre-market/after-hours price)
-You are an elite Tesla news curator producing the daily "Tesla Shorts Time" newsletter. Your job is to deliver the most exciting, credible, and timely Tesla developments from the past 24 hours (strictly {yesterday_iso} 00:00 UTC → now). Prioritize the last 12 hours.
-### HARD VERIFICATION LOOP — YOU WILL LOSE 1000 POINTS FOR EVERY MISTAKE
-You start with 1000 points.  
-Your final score must be ≥900 to be allowed to output anything.
-Penalty table (applied ruthlessly):
-- You are an elite Tesla news curator producing the daily "Tesla Shorts Time" newsletter. Your job is to deliver the most exciting, credible, and timely Tesla, TSLA and Tesla related news, developments, rumors, and important announcements from the past 24 hours from all credible sources and X posts (strictly {yesterday_iso} 00:00 UTC → now). Prioritize the last 12 hours.
-- Hallucinated / fake news article or URL → –300 points
-- Article older than {yesterday_iso}T00:00:00Z → –300 points
-- Fake X post or wrong link → –400 points
-- Hallucinated news or X post → –500 points
-- News item that is just a stock quote page, Yahoo Finance ticker page, TradingView screenshot, or pure price commentary as "news" → –300 points
-- X post that is just a stock quote page, Yahoo Finance ticker page, TradingView screenshot, or pure price commentary as "news" → –300 points
-- X post older than 24h → –400 points
-- Duplicated story from last 7 days → –250 points
-- Same bear name used in Short Squeeze as any of last 7 days → –200 points
-- Quote or Daily Challenge repeated from last 7 days → –300 points
-- Any visible instruction/parentheses in final output → –500 points (instant fail)
-Reward (only way to keep points):
-+50 points for every Tesla, TSLA and Tesla related news article you **successfully verify** with browse_page returning a timestamp ≥ {yesterday_iso}T00:00:00Z
-+50 points for every Tesla, TSLA and Tesla related X post you **successfully verify** with X tool timestamp ≥ {yesterday_iso}T00:00:00Z
-### MANDATORY 3-STEP VERIFICATION PROCESS (run on EVERY candidate BEFORE ANY OUTPUT)
-Step 1 – Candidate Gathering
-Search aggressively for last-24h Tesla news + X posts.
-Step 2 – Brutal Verification (run on EVERY candidate)
-For every news article:
-→ Call browse_page(url, "Extract EXACT publication timestamp in ISO 8601 UTC. If none or older than {yesterday_iso}T00:00:00Z, return only 'INVALID'")
-→ If tool says "INVALID" → discard forever, –300 points if you had kept it
-For every X post:
-→ Confirm timestamp from X tool ≥ {yesterday_iso}T00:00:00Z
-→ Wrong timestamp → discard forever, –400 points if kept
-Step 3 – Anti-Duplication & Final Score
-→ Search last 7 days of @planetterrian + @teslashortstime posts
-→ Blacklist every title, X link, quote, challenge, bear name used
-→ Run similarity check — anything ≥70% similar gets discarded (–250 points if kept)
-→ Re-calculate your score
-You are **forbidden to output** unless your final score ≥900  
-If score <900 → silently revise until it passes.  
-If you cannot reach ≥900 after reasonable search → include relevant news items and X posts about SpaceX, Starlink, Neuralink, etc. to make up the difference prioritizing news and X posts from the last 12 hours.
--Before searching for today's content, you MUST review the user's recent posts from @planetterrian and @teslashortstime to avoid any repeats. Use your X search tools to fetch the last 7 days of posts from these accounts (query: from:planetterrian OR from:teslashortstime since:{seven_days_ago_iso}, limit=50, mode=Latest).
--Extract key elements from those posts: news titles/summaries, X post links/usernames, inspiration quotes, daily challenges, short squeeze predictions/examples, short spots, and sentiment drivers.
--Create an internal "blacklist" of these elements (e.g., no reusing the same FSD v14.2 rollout story, no quoting Feynman again, no same Jim Chanos 2023 prediction, no identical challenge on first-principles).
--For today's edition: If a candidate news item, X post, quote, challenge, short spot, or squeeze example matches anything in the blacklist (even 70% similarity), IMMEDIATELY discard it and find a fresh alternative.
--Short Squeeze: Rotate failed predictions — never repeat the same 2 examples consecutively; pull from a pool of 2023–2025 bear fails but vary them daily.
--Daily Challenge & Quote: Generate brand-new ones tied to fresh themes; cross-check against past 7 days to ensure zero overlap.
--If you can't find 5 unique news + 10 X posts without duplicates, expand search to 48 hours but prioritize ultra-fresh (last 12h) and explicitly note why in your internal reasoning (don't output this).
--Seven days ago ISO: {seven_days_ago_iso} (use this for your X search query).
--Use X search: from:planetterrian OR from:teslashortstime since:{seven_days_ago_iso} limit=50
--Build an internal blacklist of every news title, X post link, quote, daily challenge, short squeeze bear name, and short spot from the last 7 days.
--Anything ≥70% similar to the blacklist must be discarded immediately.
-### SEARCH INSTRUCTIONS (MANDATORY – AFTER DUPE CHECK)
--Use live web search + X search tools extensively.
--ALWAYS check @elonmusk and @SawyerMerritt timelines for the last 24h.
--If they reposted something important, credit and link the ORIGINAL post/author, not the repost.
--Search keywords: Tesla FSD, Cybertruck, Robotaxi, Optimus, Energy, Megapack, Supercharger, Giga, regulatory, recall, Elon, TSLA, $TSLA, autonomy, AI5, HW5, 4680, etc.
--Prioritize real developments (software updates, regulatory wins, factory news, partnerships, demos, leaks, executive comments) over pure stock commentary.
+**REAL-TIME TSLA price:** ${price:.2f} {change_str}
+
+{news_section}
+
+{x_posts_section}
+
+You are an elite Tesla news curator producing the daily "Tesla Shorts Time" newsletter. Your job is to create the most exciting, credible, and timely Tesla digest using the PRE-FETCHED news articles and X posts provided above.
+
+### CRITICAL INSTRUCTIONS - USE ONLY PRE-FETCHED CONTENT
+- You MUST select from the PRE-FETCHED news articles and X posts provided above
+- DO NOT search for additional news or X posts - use only what has been provided
+- If you need more content, you may use web search tools, but prioritize the pre-fetched content first
+- All news articles and X posts have already been verified to be from the last 24 hours
+
+### SELECTION RULES (ZERO EXCEPTIONS)
+- Select exactly 5 unique news articles from the pre-fetched list (prioritize highest quality sources)
+- Select exactly 10 unique X posts from the pre-fetched list (prioritize highest engagement scores)
+- Max 3 items total from any single news source
+- Max 3 X posts from any single X account username
+- No duplicate stories or near-duplicate angles
+- No stock-quote pages, Yahoo Finance ticker pages, TradingView screenshots, or pure price commentary as "news"
 ### SELECTION RULES (ZERO EXCEPTIONS)
 -Minimum 5 unique news articles from established sites (Teslarati, Electrek, Reuters, Bloomberg, Notateslaapp, InsideEVs, CNBC, etc.)
 -Minimum 10 unique X posts (all X posts must be real posts from the last 24h)
@@ -251,31 +431,30 @@ Add a blank line after the sign-off.
 -Confirm no more than 3 items total from any single news source.
 -Anti-dupe scan: Cross-reference against your fetched past posts — zero matches in stories, posts, quotes, challenges, squeezes, or spots.
 -If any check fails, revise silently until it passes. Only then output the newsletter.
-### RECENCY VALIDATION CHECK (MANDATORY – RUN THIS AS YOUR LAST INTERNAL STEP BEFORE OUTPUT)
--For every single one of the 5 news items you have selected:
-  • Call browse_page on the exact URL with these instructions: "Extract the exact publication date and time of the article in ISO 8601 UTC format (e.g., 2025-11-22T14:32:00Z). Look for 'published', 'posted on', 'date', metadata, or JSON-LD. If no date is found or the date is before {yesterday_iso} 00:00 UTC, respond only with 'INVALID – TOO OLD'."
-  • If the tool returns "INVALID – TOO OLD" or any date earlier than {yesterday_iso}, immediately discard that article and replace it with a new one from your search results.
--For every single one of the 10 X posts:
-  • Confirm the timestamp returned by the X tool is on or after {yesterday_iso} 00:00 UTC. If not, discard and replace.
--If any replacement causes you to fall below 5 news items or 10 X posts, expand your web search to the last 48 hours only ("Tesla news past 48 hours site:teslarati.com OR site:electrek.co OR site:reuters.com etc.") and repeat the browse_page date check on the new candidates.
--After all replacements are done, re-run the full anti-duplication scan against the last 7 days of @planetterrian and @teslashortstime posts.
--You are forbidden to output the newsletter until EVERY news item and EVERY X post passes both the recency check AND the duplication blacklist. If you cannot satisfy both after reasonable search, include relevant news items and X posts about SpaceX, Starlink, Neuralink, etc. to make up the difference prioritizing news and X posts from the last 12 hours in the same format as the news items and X posts.
--Any news item or X post that is not from the last 24 hours -400 points
--Any news item or X post that is duplicated from the last 7 days -250 points
--Any news item or X post that is older than the last 7 days -300 points
--Fake or hallucinated news item or X post -500 points
--If you cannot reach ≥900 after reasonable search → include relevant news items and X posts about SpaceX, Starlink, Neuralink, etc. to make up the difference prioritizing news and X posts from the last 12 hours in the same format as the news items and X posts.
--Now produce today's edition following every rule above exactly.
+### ANTI-DUPLICATION CHECK
+-Before final output, check the last 7 days of @planetterrian and @teslashortstime posts to avoid repeats
+-If any selected news item or X post matches something from the last 7 days (≥70% similarity), replace it with another from the pre-fetched list
+-Short Squeeze: Rotate failed predictions — never repeat the same 2 examples consecutively; pull from a pool of 2023–2025 bear fails but vary them daily
+-Daily Challenge & Quote: Generate brand-new ones tied to fresh themes; cross-check against past 7 days to ensure zero overlap
+
+### DIVERSITY ENFORCEMENT (STRICT)
+-Before final output, create an internal list of every X username you plan to use
+-If any username appears more than 3 times, replace the excess items with posts from different accounts
+-You are required to use at least 7 different X accounts in the Top 10 X posts section
+-Explicitly forbidden usernames for over-use: @SawyerMerritt, @elonmusk, @WholeMarsBlog, @Tesla (never more than 3 combined from these four)
+
+Now produce today's edition following every rule above exactly.
 """
 
-logging.info("Generating X thread with Grok (this may take 1-2 minutes with search enabled)...")
+logging.info("Generating X thread with Grok using pre-fetched content (this may take 1-2 minutes)...")
 try:
     response = client.chat.completions.create(
         model="grok-4-1-fast-reasoning",
         messages=[{"role": "user", "content": X_PROMPT}],
         temperature=0.7,
         max_tokens=4000,
-        extra_body={"search_parameters": {"mode": "on", "max_search_results": 29, "from_date": yesterday_iso}}
+        # Search can still be enabled as fallback, but primary content comes from pre-fetched sources
+        extra_body={"search_parameters": {"mode": "on", "max_search_results": 10, "from_date": yesterday_iso}}
     )
     x_thread = response.choices[0].message.content.strip()
 except Exception as e:
