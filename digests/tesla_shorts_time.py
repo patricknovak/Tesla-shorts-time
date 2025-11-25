@@ -391,10 +391,11 @@ Use this exact structure and markdown (includes invisible zero-width spaces for 
 Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939
 ### Top 5 News Items
 **Title That Fits in One Line: DD Month, YYYY, HH:MM AM/PM PST, Source Name**
-   2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with link in Source
+   2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with link in Source
 ... Always number news items as 1. 2. etc. with a space after each and a new line after each.
+### Top 10 X Posts
 **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
-   2–4 sentences explaining the post and its significance. End with Post link.
+   2–4 sentences explaining the post and its significance. End with Post link.
 ... Always number X posts as 1. 2. etc. with a space after each and a new line after each.
 ## Short Spot
 One bearish news or X post item that is a major negative for Tesla and the stock.
