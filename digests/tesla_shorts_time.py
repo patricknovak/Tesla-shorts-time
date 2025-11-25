@@ -469,30 +469,82 @@ Use this exact structure and markdown (includes invisible zero-width spaces for 
 **Date:** {today_str}
 **REAL-TIME TSLA price:** ${price:.2f}
 Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939
+
+━━━━━━━━━━━━━━━━━━━━
+
 ### Top 5 News Items
-**Title That Fits in One Line: DD Month, YYYY, HH:MM AM/PM PST, Source Name**
+1. **Title That Fits in One Line: DD Month, YYYY, HH:MM AM/PM PST, Source Name**
    2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with link in Source
-... Always number news items as 1. 2. etc. with a space after each and a new line after each.
+
+2. **Title That Fits in One Line: DD Month, YYYY, HH:MM AM/PM PST, Source Name**
+   2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with link in Source
+
+3. **Title That Fits in One Line: DD Month, YYYY, HH:MM AM/PM PST, Source Name**
+   2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with link in Source
+
+4. **Title That Fits in One Line: DD Month, YYYY, HH:MM AM/PM PST, Source Name**
+   2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with link in Source
+
+5. **Title That Fits in One Line: DD Month, YYYY, HH:MM AM/PM PST, Source Name**
+   2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with link in Source
+
+━━━━━━━━━━━━━━━━━━━━
+
 ### Top 10 X Posts
-**Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
+1. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
    2–4 sentences explaining the post and its significance. End with Post link.
-... Always number X posts as 1. 2. etc. with a space after each and a new line after each.
+
+2. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
+   2–4 sentences explaining the post and its significance. End with Post link.
+
+3. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
+   2–4 sentences explaining the post and its significance. End with Post link.
+
+4. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
+   2–4 sentences explaining the post and its significance. End with Post link.
+
+5. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
+   2–4 sentences explaining the post and its significance. End with Post link.
+
+6. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
+   2–4 sentences explaining the post and its significance. End with Post link.
+
+7. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
+   2–4 sentences explaining the post and its significance. End with Post link.
+
+8. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
+   2–4 sentences explaining the post and its significance. End with Post link.
+
+9. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
+   2–4 sentences explaining the post and its significance. End with Post link.
+
+10. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
+   2–4 sentences explaining the post and its significance. End with Post link.
+
+━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━
+
 ## Short Spot
 One bearish news or X post item that is a major negative for Tesla and the stock.
 **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST, @username Post**
-   2–4 sentences explaining the post and its significance. End with Post link.
-Add a blank line after the short spot.      
+   2–4 sentences explaining the post and its significance. End with Post link.
+
+━━━━━━━━━━━━━━━━━━━━
+
 ### Short Squeeze
 Dedicated paragraph celebrating short-seller pain. Must include:
 Current short interest % and $ value (cite source if possible).
 At least 2 specific failed bear predictions from 2023–2025 with links or references (vary from past editions).
 Total $ losses shorts have taken YTD or in a recent squeeze event.
-Add a blank line after the short squeeze.
+
+━━━━━━━━━━━━━━━━━━━━
+
 ### Daily Challenge
 One short, inspiring personal-growth challenge tied to Tesla/Elon themes (curiosity, first principles, perseverance). End with: "Share your progress with us @teslashortstime!"
-Add a blank line after the daily challenge.
+
+━━━━━━━━━━━━━━━━━━━━
+
 **Inspiration Quote:** "Exact quote" – Author, [Source Link] (fresh, no repeats from last 7 days)
-Add a blank line after the inspiration quote.
 [Final 2-3 sentence uplifting sign-off about Tesla's mission and invitation to DM @teslashortstime with feedback]
 Add a blank line after the sign-off.
 ### TONE & STYLE RULES (NON-NEGOTIABLE)
@@ -504,13 +556,15 @@ Add a blank line after the sign-off.
 
 ### FINAL VALIDATION BEFORE OUTPUT (MANDATORY)
 Before outputting, verify:
-1. ✅ Exactly 5 news items are included (numbered 1-5) - each covering a DIFFERENT story
-2. ✅ Exactly 10 X posts are included (numbered 1-10) - THIS IS CRITICAL AND MANDATORY - each covering a DIFFERENT topic/angle
-3. ✅ NO DUPLICATES: Each news item and X post covers a unique story/angle (no two items about the same news event)
-4. ✅ Short Spot section is included
-5. ✅ Short Squeeze section is included
-6. ✅ Daily Challenge section is included
-7. ✅ Inspiration Quote is included
+1. ✅ Exactly 5 news items are included (numbered 1. 2. 3. 4. 5.) - each covering a DIFFERENT story
+2. ✅ Exactly 10 X posts are included (numbered 1. 2. 3. 4. 5. 6. 7. 8. 9. 10.) - THIS IS CRITICAL AND MANDATORY - each covering a DIFFERENT topic/angle
+3. ✅ All numbered lists use the format "1. " (number, period, space) - NOT bullet points or other formats
+4. ✅ Separator lines "━━━━━━━━━━━━━━━━━━━━" are included before each major section
+5. ✅ NO DUPLICATES: Each news item and X post covers a unique story/angle (no two items about the same news event)
+6. ✅ Short Spot section is included
+7. ✅ Short Squeeze section is included
+8. ✅ Daily Challenge section is included
+9. ✅ Inspiration Quote is included
 
 **SIMILARITY CHECK**: Review all 5 news items and all 10 X posts. If any two items cover the same story or make the same point, replace one with a different item. Each item must be unique.
 
@@ -577,9 +631,43 @@ def format_digest_for_x(digest: str) -> str:
     # Add emoji to Inspiration Quote
     formatted = re.sub(r'\*\*Inspiration Quote:\*\*', '✨ **Inspiration Quote:**', formatted)
     
-    # Add visual separators between major sections (subtle, not too heavy)
-    # Only add separators before main sections, not before every subsection
-    formatted = re.sub(r'\n\n(📰|🐦|📉|📈|💪)', r'\n\n━━━━━━━━━━━━━━━━━━━━\n\n\1', formatted)
+    # Add separator lines before major sections
+    # First, remove any existing separators to avoid duplicates
+    formatted = re.sub(r'\n\n━━━━━━━━━━━━━━━━━━━━\n\n+', '\n\n', formatted)
+    
+    separator = '\n\n━━━━━━━━━━━━━━━━━━━━\n\n'
+    
+    # Add separator before Top 5 News Items (check both formatted and unformatted versions)
+    formatted = re.sub(r'(\n\n)(📰 \*\*Top 5 News Items\*\*)', separator + r'\2', formatted)
+    formatted = re.sub(r'(\n\n)(### Top 5 News Items)', separator + r'\2', formatted)
+    
+    # Add separator before Top 10 X Posts
+    formatted = re.sub(r'(\n\n)(🐦 \*\*Top 10 X Posts\*\*)', separator + r'\2', formatted)
+    formatted = re.sub(r'(\n\n)(### Top 10 X Posts)', separator + r'\2', formatted)
+    
+    # Add separator before Short Spot
+    formatted = re.sub(r'(\n\n)(📉 \*\*Short Spot\*\*)', separator + r'\2', formatted)
+    formatted = re.sub(r'(\n\n)(## Short Spot)', separator + r'\2', formatted)
+    
+    # Add separator before Short Squeeze
+    formatted = re.sub(r'(\n\n)(📈 \*\*Short Squeeze\*\*)', separator + r'\2', formatted)
+    formatted = re.sub(r'(\n\n)(### Short Squeeze)', separator + r'\2', formatted)
+    
+    # Add separator before Daily Challenge
+    formatted = re.sub(r'(\n\n)(💪 \*\*Daily Challenge\*\*)', separator + r'\2', formatted)
+    formatted = re.sub(r'(\n\n)(### Daily Challenge)', separator + r'\2', formatted)
+    
+    # Add separator before Inspiration Quote
+    formatted = re.sub(r'(\n\n)(✨ \*\*Inspiration Quote:\*\*)', separator + r'\2', formatted)
+    
+    # Ensure numbered lists are properly formatted
+    # Fix news items: ensure they're numbered 1. 2. 3. etc. (not just bullet points)
+    # Look for patterns like "1." or "1 " at the start of lines in the news section
+    # This regex ensures numbered format: number followed by period and space
+    formatted = re.sub(r'^(\d+)[\.\s]+(?=\*\*[^📰🐦📉📈💪])', r'\1. ', formatted, flags=re.MULTILINE)
+    
+    # Ensure X posts are numbered correctly (1. 2. 3. etc.)
+    # The numbering should already be in the prompt, but we'll ensure consistency
     
     # Clean up excessive newlines (more than 3 consecutive becomes 2)
     formatted = re.sub(r'\n{4,}', '\n\n', formatted)
