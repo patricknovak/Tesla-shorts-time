@@ -448,6 +448,115 @@ for line in x_thread.splitlines():
     lines.append(line)
 x_thread = "\n".join(lines).strip()
 
+# ========================== STEP 4: FORMAT DIGEST FOR BEAUTIFUL X POST ==========================
+logging.info("Step 4: Formatting digest for beautiful X post...")
+
+def format_digest_for_x(digest: str) -> str:
+    """
+    Format the digest beautifully for a long X post with emojis, proper spacing, and visual appeal.
+    X supports up to 25,000 characters for long posts.
+    """
+    import re
+    
+    formatted = digest
+    
+    # Add emoji to main header (only if it's the first line)
+    formatted = re.sub(r'^# Tesla Shorts Time', '🚗⚡ **Tesla Shorts Time**', formatted, flags=re.MULTILINE)
+    
+    # Format date line with emoji
+    formatted = re.sub(r'\*\*Date:\*\*', '📅 **Date:**', formatted)
+    
+    # Format price line with emoji
+    formatted = re.sub(r'\*\*REAL-TIME TSLA price:\*\*', '💰 **REAL-TIME TSLA price:**', formatted)
+    
+    # Format podcast link with emoji
+    formatted = re.sub(r'Tesla Shorts Time Daily Podcast Link:', '🎙️ Tesla Shorts Time Daily Podcast Link:', formatted)
+    
+    # Format section headers with emojis (preserve existing markdown)
+    formatted = re.sub(r'^### Top 5 News Items', '📰 **Top 5 News Items**', formatted, flags=re.MULTILINE)
+    formatted = re.sub(r'^### Top 10 X Posts', '🐦 **Top 10 X Posts**', formatted, flags=re.MULTILINE)
+    formatted = re.sub(r'^## Short Spot', '📉 **Short Spot**', formatted, flags=re.MULTILINE)
+    formatted = re.sub(r'^### Short Squeeze', '📈 **Short Squeeze**', formatted, flags=re.MULTILINE)
+    formatted = re.sub(r'^### Daily Challenge', '💪 **Daily Challenge**', formatted, flags=re.MULTILINE)
+    
+    # Add emoji to Inspiration Quote
+    formatted = re.sub(r'\*\*Inspiration Quote:\*\*', '✨ **Inspiration Quote:**', formatted)
+    
+    # Add visual separators between major sections (subtle, not too heavy)
+    # Only add separators before main sections, not before every subsection
+    formatted = re.sub(r'\n\n(📰|🐦|📉|📈|💪)', r'\n\n━━━━━━━━━━━━━━━━━━━━\n\n\1', formatted)
+    
+    # Clean up excessive newlines (more than 3 consecutive becomes 2)
+    formatted = re.sub(r'\n{4,}', '\n\n', formatted)
+    
+    # Ensure proper spacing: add a blank line before numbered items if missing
+    formatted = re.sub(r'\n(\d+\.)', r'\n\n\1', formatted)
+    
+    # Clean up: remove any triple newlines that might have been created
+    formatted = re.sub(r'\n{3,}', '\n\n', formatted)
+    
+    # Clean up any markdown code blocks if any (they don't render well on X)
+    formatted = re.sub(r'```[^`]*```', '', formatted, flags=re.DOTALL)
+    
+    # Ensure the post ends nicely if it doesn't already
+    formatted = formatted.strip()
+    if formatted and not formatted[-1] in '!?.':
+        # Check if it ends with a quote or sign-off
+        last_lines = formatted.split('\n')[-3:]
+        last_text = ' '.join(last_lines).strip()
+        if not any(word in last_text.lower() for word in ['feedback', 'dm', 'accelerating', 'electric', 'mission']):
+            formatted += '\n\n⚡ Keep accelerating!'
+    
+    # Final cleanup: normalize whitespace
+    # Replace multiple spaces with single space (but preserve intentional formatting)
+    lines = formatted.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        # Preserve lines that are mostly spaces (intentional spacing)
+        if line.strip() == '':
+            cleaned_lines.append('')
+        else:
+            # Clean up excessive spaces but preserve markdown formatting
+            cleaned_line = re.sub(r'[ \t]{2,}', ' ', line)
+            cleaned_lines.append(cleaned_line)
+    formatted = '\n'.join(cleaned_lines)
+    
+    # Final newline cleanup
+    formatted = re.sub(r'\n{3,}', '\n\n', formatted)
+    formatted = formatted.strip()
+    
+    # Check character limit (X allows 25,000 characters for long posts)
+    max_chars = 25000
+    if len(formatted) > max_chars:
+        logging.warning(f"Formatted digest is {len(formatted)} characters, truncating to {max_chars}")
+        # Try to truncate at a natural break point
+        truncate_at = formatted[:max_chars-100].rfind('\n\n')
+        if truncate_at > max_chars * 0.8:  # Only if we can keep at least 80% of content
+            formatted = formatted[:truncate_at] + "\n\n... (content truncated for length)"
+        else:
+            formatted = formatted[:max_chars-50] + "\n\n... (truncated for length)"
+    
+    return formatted
+
+# Format the digest
+x_thread_formatted = format_digest_for_x(x_thread)
+logging.info(f"Digest formatted for X ({len(x_thread_formatted)} characters)")
+
+# Save both versions (original and formatted)
+x_path = digests_dir / f"Tesla_Shorts_Time_{datetime.date.today():%Y%m%d}.md"
+x_path_formatted = digests_dir / f"Tesla_Shorts_Time_{datetime.date.today():%Y%m%d}_formatted.md"
+
+with open(x_path, "w", encoding="utf-8") as f:
+    f.write(x_thread)
+logging.info(f"Original X thread saved → {x_path}")
+
+with open(x_path_formatted, "w", encoding="utf-8") as f:
+    f.write(x_thread_formatted)
+logging.info(f"Formatted X thread saved → {x_path_formatted}")
+
+# Use the formatted version for posting
+x_thread = x_thread_formatted
+
 # Save X thread
 x_path = digests_dir / f"Tesla_Shorts_Time_{datetime.date.today():%Y%m%d}.md"
 with open(x_path, "w", encoding="utf-8") as f:
@@ -1048,11 +1157,10 @@ if not TEST_MODE and final_mp3.exists():
 # Post everything to X in ONE SINGLE POST
 if ENABLE_X_POSTING:
     try:
-        x_path = digests_dir / f"Tesla_Shorts_Time_{datetime.date.today():%Y%m%d}.md"
-        with open(x_path, "r", encoding="utf-8") as f:
-            thread_text = f.read().strip()
+        # Use the formatted version that's already in memory (from Step 4)
+        thread_text = x_thread.strip()
         
-        # Post as one single tweet
+        # Post as one single tweet (X supports long posts up to 25,000 characters)
         tweet = x_client.create_tweet(text=thread_text)
         tweet_id = tweet.data['id']
         thread_url = f"https://x.com/planetterrian/status/{tweet_id}"
