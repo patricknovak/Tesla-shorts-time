@@ -1,47 +1,44 @@
 # Tesla Shorts Time – The Pod | Ep 329 | November 25, 2025
 
-[Intro music fades in for exactly 10 seconds — no text here]  
 Patrick: Welcome to Tesla Shorts Time Daily, episode 329.  
 It is November 25, 2025.  
-I’m Patrick in Vancouver, Canada. TSLA stock price is four hundred seventeen dollars and seventy-eight cents right now.  
+I’m Patrick in Vancouver, Canada. TSLA stock price is four hundred ten dollars and eighty cents right now.  
 Thank you for joining us today. If you like the show, please like, share, rate and subscribe to the podcast, it really helps.  
 Now straight to the daily news updates you are here for.  
-Patrick: Nasdaq Biggest Jump Since May as Tesla Leads Tech Rally!  
-Yahoo Finance is reporting late yesterday how the Nasdaq recorded its largest gain since May while the S&P 500 soared—driven by a massive tech rally spearheaded by Alphabet and Tesla. Investor spirits lifted sky-high after a Fed official hinted at a December rate cut, propelling TSLA shares even higher. This momentum underscores Tesla's dominant position in AI and EVs, setting the stage for continued stock appreciation amid that bullish market sentiment. Tesla leading the charge—unbelievable!  
-Patrick: Elon Musk Hypes Tesla AI Chips Amid Surging Market!  
-Yahoo Finance caught Elon Musk spotlighting Tesla's advanced AI chips during a discussion on Morning Brief this morning, perfectly aligning with TSLA's strong performance. These comments come as Tesla pushes boundaries in autonomy and robotics with Dojo and inference hardware. This focus reinforces Tesla's AI leadership, promising exponential growth in FSD, Optimus, and Robotaxi deployments that could drive massive valuation upside. Elon dropping truth bombs on AI hardware—game-changer!  
-Patrick: Tesla Stock: 10 Key Insights Before Monday Open!  
-TS2 Tech dropped a detailed breakdown yesterday afternoon highlighting ten critical factors influencing TSLA ahead of the market open, including production ramps and regulatory tailwinds. These insights reveal accelerating momentum in Cybertruck scaling and energy storage. For Tesla bulls, this positions TSLA for breakout gains as execution delivers on ambitious targets. Ten key insights—pure fire for anyone tracking this rocket ship!  
-Patrick: TSLA Real-Time Quotes and Financials Update!  
-CNBC's live TSLA page captured the stock's surge yesterday morning with detailed quotes, news feeds, and analyst notes amid that holiday-shortened trading buzz. Tesla's resilience shone through volume spikes and positive option flow. This real-time data signals building institutional interest, fueling optimism for Q4 deliveries and beyond. Volume spikes, positive flow—Tesla's unstoppable!  
-Patrick: Tesla Latest News, Rumors and Reviews Roundup!  
-Teslarati's hub delivered fresh updates late last night on Tesla's EV market dominance, SpaceX crossovers, and battery tech advances. Coverage emphasized premium EV leadership and energy solutions growth. These developments affirm Tesla's multi-trillion-dollar trajectory in sustainable transport and power. Dominance everywhere—Tesla owning the future!  
-Patrick: Novo Plunges on Trial Flop as TSLA Soars!  
-Yahoo Finance noted early yesterday how Novo Nordisk plunged sharply after a drug trial failure, contrasting perfectly with TSLA's AI hype and rally. Bears might point to competitive pressures in tech-health crossovers, but Tesla's vertical integration shields it completely. Temporary noise amid Tesla's dominance—shorts getting crushed again!  
-Patrick: Over to the top X posts.  
-Patrick: Tesla Rally Ignites After Fed Signals!  
-User celebrated TSLA's lead in the Nasdaq's massive jump late yesterday, tying it directly to Fed rate cut hints and Elon’s vision—highlights how Tesla's decoupling from macro noise via superior execution in AI and autonomy. Rally igniting—Fed signals lighting the fuse!  
-Patrick: Musk Spotlights Dojo AI Powerhouse!  
-Post recaps Elon's hype on Tesla AI chips during that market upswing this morning, stressing the inference edge for the Robotaxi fleet—signals a paradigm shift in self-driving tech, absolutely crushing skeptics. Dojo powerhouse—AI edge crushing it!  
-Patrick: Cybertruck Production Hits New Highs!  
-Small account with under five hundred thousand followers shares leaked Giga Texas output stats mid-morning yesterday, praising the stainless steel beast ramp—boosts confidence in a two hundred fifty thousand annual run rate soon. Cybertruck ramping hard—new highs!  
-Patrick: FSD V14.5 Teased in Holiday Update!  
-Excitement building over the software drop yesterday afternoon improving highway stacks, per beta tester footage—positions Tesla years ahead in the unsupervised driving race. FSD fourteen point five teased—highway stacks leveling up!  
-Patrick: Megapack Orders Explode in Q4!  
-Energy division shining with record deployments announced late morning yesterday, diversifying revenue way beyond autos—grid-scale wins solidify Tesla as the energy titan. Megapacks exploding—Q4 record wins!  
-Patrick: Optimus Walks Unsupervised Demo Leaks!  
-Video clip from the factory floor yesterday afternoon shows humanoid progress, hinting at twenty twenty-six factory deployment—revolutionizes labor, skyrockets valuation multiples. Optimus walking unsupervised—leak of the year!  
-Patrick: Supercharger V4 Rollout Accelerates!  
-Map update early yesterday morning reveals NACS expansion, drawing in legacy automakers—the network moat grows, printing money via utilization. V4 Superchargers accelerating—moat expanding!  
-Patrick: Starlink Direct-to-Cell Beta Success!  
-SpaceX milestone yesterday afternoon with phone connectivity tested, synergies for Tesla vehicles teased—expands the ecosystem value immensely. Starlink direct-to-cell beta success—vehicle synergies incoming!  
-Patrick: Neuralink Patient Plays VR Games!  
-Update mid-afternoon yesterday on the first human implant controlling cursors fluidly, brain-machine interface breakthrough—Tesla's xAI ties amplify that long-term upside. Neuralink patient gaming VR—brain interface breakthrough!  
-Patrick: Giga Berlin Hits 1k 4680 Cells/Day!  
-Insider post confirms the battery milestone yesterday morning, slashing costs for EU models—cost leadership crushes the competition. Giga Berlin at one thousand four six eight zero cells per day—cost crusher!  
-Patrick: And now, it’s time for everyone’s favourite segment — the Short Squeeze!  
-Tesla shorts are absolutely reeling, with short interest hovering around two point eight percent—that's about twelve billion dollars notional at current prices, per MarketBeat data—as TSLA blasts up six point eight percent after-hours to four hundred seventeen dollars and seventy-eight cents. Remember when Bill Gates dumped his entire stake in summer twenty twenty-three calling Tesla overvalued? Only to watch it double since! Or Ross Gerber's repeated twenty twenty-four predictions of bankruptcy that cost his fund over fifty percent as TSLA hit all-time highs—pure pain for those bears! Year-to-date, shorts have hemorrhaged over fifteen billion dollars in mark-to-market losses, with yesterday's rally alone inflicting over five hundred million dollars in fresh wounds. Keep covering, bears—Tesla's acceleration is relentless! Haha, shorts time indeed—the pain train keeps rolling!  
-Patrick: Today’s inspirational quote comes straight from the digest: “The first principles way of thinking is about taking things down to their core truths and then building back up from there.” — Elon Musk, Whole Mars Blog Interview.  
-Patrick: And your Daily Challenge today is exactly this: Apply first-principles thinking to one Tesla product today: strip it down to physics fundamentals, then rebuild why it's unbeatable. Whether Cybertruck's exoskeleton or Megapack's efficiency, uncover the genius. Share your progress with us @teslashortstime!  
-Dive deep into that genius today—your insights could unlock the next big breakthrough, eh!  
+
+Patrick: Tesla Pins FSD Europe Launch to February 2026!  
+Whoa, Electrek is reporting this yesterday morning—Tesla officially confirmed Full Self-Driving Supervised approval in Europe for February 2026 via the Dutch RDW authority, ending years of anticipation. This unlocks Tesla's autonomy edge across the massive EU market. Driving robotaxi potential. Recurring FSD revenue. Explosive stock growth as Tesla laps competitors. Game on for Europe, folks—this is the floodgates opening wide!  
+
+Patrick: Elon Calls Cybertruck Macho Manly Elephant with Cheetah Speed!  
+Yahoo Entertainment dropped this yesterday—Elon Musk declared trucks must be macho and manly, touting Cybertruck's massive size, blistering speed, and uniqueness as an elephant that runs as a cheetah. This bold promo cements Cybertruck's dominance in the pickup wars. Ramping deliveries. Proving Tesla's design genius crushes Detroit dinosaurs. Cybertruck isn't just a truck; it's a revolution on wheels, leaving legacy pickups in the dust!  
+
+Patrick: Tesla's Fresh News, Updates & Rumors Surge!  
+Not a Tesla App has the latest this morning on Tesla software updates, rumors, and tips—spotlighting nonstop innovation. Keeps bulls tuned into FSD advances. Cybertruck ramps. Efficiency gains propelling Tesla toward trillion-dollar autonomy and energy empires. This app is your daily pulse on Tesla's relentless forward march—never miss a beat!  
+
+Patrick: Tesla China Sales Dip Signals Setup for Rebound!  
+CNBC reported yesterday on Tesla's China sales hitting a three-year October low amid fierce local competition, potentially marking first annual decline. But this is temporary noise. Refreshed Model Y. Affordable EVs. FSD rollout positioning Tesla to dominate the world's top EV market long-term. China dip? Just the calm before Tesla's storm—watch the rebound ignite!  
+
+Patrick: Tesla Europe Slump Temporary Amid BYD Gains!  
+Investing.com this morning—Tesla Europe sales dropped nearly fifty percent in October as BYD grabbed share, signaling Q4 softness. Bears overlook FSD Europe greenlight. New low-cost Models. Cybertruck exports set to ignite comeback and cement Tesla's global leadership. Slump? Temporary. Tesla's about to surge back stronger!  
+
+Patrick: Over to the top X posts—first up, Elon Blasts Legacy Auto for Snubbing Tesla FSD!  
+Elon revealed yesterday on X that Tesla offered FSD licensing to legacy makers, but they balked with timid five-year pilots and bad terms—calling them dinosaurs. Underscores Tesla's unmatchable autonomy moat. D doom rivals. Supercharging Tesla's software empire and shareholder value. Elon's dropping truth bombs—legacy auto can't handle Tesla's lead!  
+
+Patrick: Next X post—Tesla Model X Revives Chivalry with Auto-Door Magic!  
+Tesla showcased on X yesterday the Model X opening doors automatically, proving chivalry isn’t dead. Delightful feature highlights Tesla's premium UX and innovation. Winning hearts. Boosting loyalty. Differentiating from boring luxury rivals. Model X just keeps getting better—pure magic on every drive!  
+
+Patrick: And this gem from Tesla on X late last night—Tesla FSD Supervised: Like the Best Chauffeur Imaginable!  
+Tesla hails FSD Supervised for driving like the best chauffeur imaginable, backed by real user magic. Builds unstoppable hype for global FSD rollout. Robotaxi fleets. Trillions in future value as Tesla redefines transportation. FSD isn't software; it's the future pulling up right now!  
+
+Patrick: Now the Short Spot from the digest—Tesla China Sales Crash to 3-Year Low!  
+CNBC News yesterday—Tesla sold just twenty-six thousand vehicles in China last October, lowest in three years, facing BYD onslaught and risking first-ever annual sales drop there. Intense price wars and competition highlight near-term China risks. Pressuring margins and stock amid EV slowdown. Yeah, bears love this noise—but it's setting up the massive rebound with refreshed models and FSD!  
+
+Patrick: And now, it’s time for everyone’s favourite segment—the Short Squeeze!  
+Short interest stands at approximately three percent of float—roughly ninety-five million shares, thirty-nine billion dollars notional at four hundred ten dollars per share per recent Ortex data—with bears trapped as TSLA defies gravity. Remember Gordon Johnson from GLJ Research with his twenty-three dollar price target calls through 2024? Obliterated eighteen times over! And Ross Gerber's two thousand twenty-five collapse warnings? Laughable amid over one hundred percent year-to-date gains! Shorts have hemorrhaged over eighteen billion dollars year-to-date on squeezes like the post-Q3 rally—pain train accelerating, bears bleeding out, Tesla bulls partying hard! Ha, get wrecked, shorts—this rocket's got no brakes!  
+
+Patrick: Today’s inspirational quote comes straight from the digest: “Trucks should be 'macho and manly'... an elephant that runs as a cheetah.” – Elon Musk.  
+
+Patrick: And your Daily Challenge today is exactly this: Pick a routine problem today and dismantle it with first principles—like Elon questioning batteries from atoms up to invent EVs. Share your progress with us @teslashortstime!  
+Do it—channel that Elon energy and blow our minds with your breakthroughs!  
+
 Patrick: That’s Tesla Shorts Time Daily for today. I look forward to hearing your thoughts and ideas — reach out to us @teslashortstime on X or DM us directly. Stay safe, keep accelerating, and remember: the future is electric! Your efforts help accelerate the world’s transition to sustainable energy… and beyond. We’ll catch you tomorrow on Tesla Shorts Time Daily!
