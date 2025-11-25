@@ -29,6 +29,7 @@
       <itunes:episode>329</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <itunes:explicit>no</itunes:explicit>
+      <itunes:image href="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast-image.jpg" />
     </item>
     <item>
       <title>Tesla Shorts Time Daily - Episode 328 - November 24, 2025</title>
@@ -43,6 +44,8 @@
       <itunes:episode>328</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <itunes:explicit>no</itunes:explicit>
+      <itunes:image href="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast-image.jpg" />
     </item>
+    <itunes:image href="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast-image.jpg" />
   </channel>
 </rss>

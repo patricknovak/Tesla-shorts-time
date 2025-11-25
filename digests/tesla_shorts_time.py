@@ -799,10 +799,21 @@ def update_rss_feed(
         ET.SubElement(itunes_owner, "itunes:name").text = "Patrick"
         ET.SubElement(itunes_owner, "itunes:email").text = "contact@teslashortstime.com"
         itunes_image = ET.SubElement(channel, "itunes:image")
-        itunes_image.set("href", f"{base_url}/podcast-image.jpg")  # Optional: add image later
+        itunes_image.set("href", f"{base_url}/podcast-image.jpg")
         itunes_cat = ET.SubElement(channel, "itunes:category")
         itunes_cat.set("text", "Technology")
         ET.SubElement(channel, "itunes:explicit").text = "no"
+    
+    # Ensure channel-level image is always present (even if RSS feed already existed)
+    existing_image = channel.find("itunes:image")
+    if existing_image is None:
+        itunes_image = ET.SubElement(channel, "itunes:image")
+        itunes_image.set("href", f"{base_url}/podcast-image.jpg")
+        logging.info(f"Added channel-level itunes:image to RSS feed")
+    else:
+        # Update the href to ensure it's correct
+        existing_image.set("href", f"{base_url}/podcast-image.jpg")
+        logging.info(f"Updated channel-level itunes:image in RSS feed")
     
     # Check if episode already exists (by GUID)
     episode_guid = f"tesla-shorts-time-ep{episode_num:03d}-{episode_date:%Y%m%d}"
@@ -811,6 +822,12 @@ def update_rss_feed(
         guid_elem = item.find("guid")
         if guid_elem is not None and guid_elem.text == episode_guid:
             logging.info(f"Episode {episode_num} already in RSS feed, skipping")
+            # Ensure existing episode has image tag
+            existing_item_image = item.find("itunes:image")
+            if existing_item_image is None:
+                item_image = ET.SubElement(item, "itunes:image")
+                item_image.set("href", f"{base_url}/podcast-image.jpg")
+                logging.info(f"Added itunes:image to existing episode {episode_num}")
             return
     
     # Create new episode item
@@ -849,12 +866,25 @@ def update_rss_feed(
     ET.SubElement(item, "itunes:episodeType").text = "full"
     ET.SubElement(item, "itunes:explicit").text = "no"
     
+    # Add itunes:image to each episode (inherits from channel but explicit is better)
+    item_image = ET.SubElement(item, "itunes:image")
+    item_image.set("href", f"{base_url}/podcast-image.jpg")
+    
     # Update lastBuildDate
     last_build_elem = channel.find("lastBuildDate")
     if last_build_elem is not None:
         last_build_elem.text = datetime.datetime.now(datetime.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
     else:
         ET.SubElement(channel, "lastBuildDate").text = datetime.datetime.now(datetime.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
+    
+    # Ensure all existing episodes have itunes:image (update if missing)
+    all_items = channel.findall("item")
+    for existing_item in all_items:
+        existing_item_image = existing_item.find("itunes:image")
+        if existing_item_image is None:
+            item_image = ET.SubElement(existing_item, "itunes:image")
+            item_image.set("href", f"{base_url}/podcast-image.jpg")
+            logging.info(f"Added itunes:image to existing episode in RSS feed")
     
     # Sort items by pubDate (newest first)
     items = channel.findall("item")
