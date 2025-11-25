@@ -18,13 +18,60 @@
             padding: 20px;
         }
         
-        .container {
-            max-width: 900px;
+        .main-wrapper {
+            max-width: 1400px;
             margin: 0 auto;
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        
+        .container {
+            flex: 1;
+            max-width: 900px;
             background: white;
             border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             overflow: hidden;
+        }
+        
+        .twitter-sidebar {
+            flex: 0 0 400px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            max-height: 800px;
+        }
+        
+        .twitter-header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .twitter-header h2 {
+            font-size: 1.5em;
+            margin: 0;
+        }
+        
+        .twitter-timeline-container {
+            padding: 20px;
+            height: calc(800px - 80px);
+            overflow-y: auto;
+        }
+        
+        @media (max-width: 1024px) {
+            .main-wrapper {
+                flex-direction: column;
+            }
+            
+            .twitter-sidebar {
+                flex: 1;
+                width: 100%;
+                max-width: 900px;
+            }
         }
         
         .header {
@@ -188,9 +235,11 @@
             text-decoration: underline;
         }
     </style>
+    <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
 </head>
 <body>
-    <div class="container">
+    <div class="main-wrapper">
+        <div class="container">
         <div class="header">
             <h1>🚗⚡ Tesla Shorts Time Daily</h1>
             <p>Daily Tesla News Digest & Podcast</p>
@@ -208,6 +257,22 @@
             <a href="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast.rss" target="_blank">📡 RSS Feed</a> | 
             <a href="https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939" target="_blank">🍎 Apple Podcasts</a> |
             <a href="https://github.com/patricknovak/Tesla-shorts-time" target="_blank">💻 GitHub</a>
+        </div>
+        </div>
+        
+        <div class="twitter-sidebar">
+            <div class="twitter-header">
+                <h2>🐦 Latest from @teslashortstime</h2>
+            </div>
+            <div class="twitter-timeline-container">
+                <a class="twitter-timeline" 
+                   data-theme="light" 
+                   data-tweet-limit="5" 
+                   data-chrome="noheader nofooter noscrollbar" 
+                   href="https://twitter.com/teslashortstime?ref_src=twsrc%5Etfw">
+                   Tweets by teslashortstime
+                </a>
+            </div>
         </div>
     </div>
     
