@@ -443,15 +443,16 @@
                         title,
                         description: description.replace(/<[^>]*>/g, '').substring(0, 200) + '...',
                         pubDate: formatDate(pubDate),
+                        pubDateRaw: pubDate, // Keep raw date for sorting
                         audioUrl,
                         duration
                     });
                 });
                 
-                // Sort episodes by date (newest first)
+                // Sort episodes by date (newest first) - RSS feeds are usually already sorted, but ensure it
                 episodes.sort((a, b) => {
-                    const dateA = new Date(episodes.find(e => e.title === a.title)?.pubDate || 0);
-                    const dateB = new Date(episodes.find(e => e.title === b.title)?.pubDate || 0);
+                    const dateA = new Date(a.pubDateRaw || 0);
+                    const dateB = new Date(b.pubDateRaw || 0);
                     return dateB - dateA;
                 });
                 
