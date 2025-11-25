@@ -137,15 +137,79 @@
             margin: 0;
         }
         
-        .twitter-timeline-container {
+        .twitter-posts-container {
             padding: 20px;
-            height: calc(600px - 80px);
+            max-height: calc(600px - 80px);
             overflow-y: auto;
             min-height: 400px;
         }
         
-        .twitter-timeline-container iframe {
-            width: 100% !important;
+        .twitter-post {
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #f9f9f9;
+        }
+        
+        .twitter-post-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .twitter-post-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 10px;
+            background: #1da1f2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .twitter-post-author {
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+        
+        .twitter-post-date {
+            font-size: 0.85em;
+            color: #666;
+            margin-left: auto;
+        }
+        
+        .twitter-post-text {
+            color: #333;
+            line-height: 1.5;
+            margin-bottom: 10px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .twitter-post-link {
+            color: #1da1f2;
+            text-decoration: none;
+            font-size: 0.9em;
+        }
+        
+        .twitter-post-link:hover {
+            text-decoration: underline;
+        }
+        
+        .twitter-iframe-container {
+            width: 100%;
+            height: 500px;
+            overflow: hidden;
+        }
+        
+        .twitter-iframe-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
         }
         
         @media (max-width: 1024px) {
@@ -385,16 +449,10 @@
                 <div class="twitter-header">
                     <h2>🐦 Latest Posts from @teslashortstime</h2>
                 </div>
-                <div class="twitter-timeline-container" id="twitter-timeline-container">
-                    <a class="twitter-timeline" 
-                       data-theme="light" 
-                       data-tweet-limit="5" 
-                       data-chrome="noheader nofooter noscrollbar" 
-                       data-width="360"
-                       data-height="500"
-                       href="https://twitter.com/teslashortstime?ref_src=twsrc%5Etfw">
-                       Posts by teslashortstime
-                    </a>
+                <div class="twitter-posts-container" id="twitter-posts-container">
+                    <div id="twitter-loading" class="loading">Loading posts...</div>
+                    <div id="twitter-posts"></div>
+                    <div id="twitter-error" class="error" style="display: none;"></div>
                 </div>
             </div>
         </div>
@@ -407,15 +465,36 @@
         
         // Parse RSS feed
         async function loadPodcast() {
+            const loadingEl = document.getElementById('loading');
+            const errorEl = document.getElementById('error');
+            const episodesEl = document.getElementById('episodes');
+            
             try {
                 console.log('Loading RSS feed from:', RSS_FEED_URL);
-                // Use CORS proxy to avoid CORS issues
-                const proxyUrl = 'https://api.allorigins.win/raw?url=';
-                const response = await fetch(proxyUrl + encodeURIComponent(RSS_FEED_URL));
-                if (!response.ok) throw new Error(`Failed to load RSS feed: ${response.status}`);
                 
-                const xmlText = await response.text();
+                // Try direct fetch first, then fallback to CORS proxy
+                let response;
+                let xmlText;
+                
+                try {
+                    response = await fetch(RSS_FEED_URL);
+                    if (!response.ok) throw new Error(`Direct fetch failed: ${response.status}`);
+                    xmlText = await response.text();
+                    console.log('RSS feed loaded directly');
+                } catch (directError) {
+                    console.log('Direct fetch failed, trying CORS proxy:', directError);
+                    const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                    response = await fetch(proxyUrl + encodeURIComponent(RSS_FEED_URL));
+                    if (!response.ok) throw new Error(`Failed to load RSS feed: ${response.status}`);
+                    xmlText = await response.text();
+                    console.log('RSS feed loaded via CORS proxy');
+                }
+                
                 console.log('RSS feed loaded, length:', xmlText.length);
+                
+                if (!xmlText || xmlText.length < 100) {
+                    throw new Error('RSS feed appears to be empty or invalid');
+                }
                 
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
@@ -424,12 +503,16 @@
                 const parserError = xmlDoc.querySelector('parsererror');
                 if (parserError) {
                     console.error('RSS parsing error:', parserError.textContent);
-                    throw new Error('Failed to parse RSS feed');
+                    throw new Error('Failed to parse RSS feed XML');
                 }
                 
                 // Handle namespaces properly
                 const items = xmlDoc.getElementsByTagName('item');
                 console.log('Found items:', items.length);
+                
+                if (items.length === 0) {
+                    throw new Error('No items found in RSS feed');
+                }
                 
                 const episodes = [];
                 const itunesNS = 'http://www.itunes.com/dtds/podcast-1.0.dtd';
@@ -437,32 +520,54 @@
                 for (let i = 0; i < items.length; i++) {
                     const item = items[i];
                     
-                    const title = item.getElementsByTagName('title')[0]?.textContent || 'Untitled';
-                    const description = item.getElementsByTagName('description')[0]?.textContent || '';
-                    const pubDate = item.getElementsByTagName('pubDate')[0]?.textContent || '';
-                    const enclosure = item.getElementsByTagName('enclosure')[0];
-                    const audioUrl = enclosure?.getAttribute('url') || '';
-                    
-                    // Get duration from itunes namespace
-                    let duration = '';
-                    const durationEl = item.getElementsByTagNameNS(itunesNS, 'duration')[0];
-                    if (durationEl) {
-                        duration = durationEl.textContent || '';
-                    }
-                    
-                    if (audioUrl) {
+                    try {
+                        const titleEl = item.getElementsByTagName('title')[0];
+                        const title = titleEl ? titleEl.textContent.trim() : 'Untitled';
+                        
+                        const descEl = item.getElementsByTagName('description')[0];
+                        const description = descEl ? descEl.textContent.trim() : '';
+                        
+                        const pubDateEl = item.getElementsByTagName('pubDate')[0];
+                        const pubDate = pubDateEl ? pubDateEl.textContent.trim() : '';
+                        
+                        const enclosure = item.getElementsByTagName('enclosure')[0];
+                        if (!enclosure) {
+                            console.warn(`Skipping item ${i}: no enclosure found`);
+                            continue;
+                        }
+                        
+                        const audioUrl = enclosure.getAttribute('url');
+                        if (!audioUrl) {
+                            console.warn(`Skipping item ${i}: no audio URL`);
+                            continue;
+                        }
+                        
+                        // Get duration from itunes namespace
+                        let duration = '';
+                        const durationEl = item.getElementsByTagNameNS(itunesNS, 'duration')[0];
+                        if (durationEl) {
+                            duration = durationEl.textContent.trim();
+                        }
+                        
                         episodes.push({
-                            title,
-                            description: description.replace(/<[^>]*>/g, '').substring(0, 200) + '...',
+                            title: title || 'Untitled Episode',
+                            description: description.replace(/<[^>]*>/g, '').substring(0, 200) + (description.length > 200 ? '...' : ''),
                             pubDate: formatDate(pubDate),
                             pubDateRaw: pubDate,
-                            audioUrl,
-                            duration
+                            audioUrl: audioUrl,
+                            duration: duration || '0:00'
                         });
+                    } catch (itemError) {
+                        console.warn(`Error parsing item ${i}:`, itemError);
+                        continue;
                     }
                 }
                 
-                console.log('Parsed episodes:', episodes.length);
+                console.log('Successfully parsed episodes:', episodes.length);
+                
+                if (episodes.length === 0) {
+                    throw new Error('No valid episodes found in RSS feed');
+                }
                 
                 // Sort episodes by date (newest first)
                 episodes.sort((a, b) => {
@@ -471,23 +576,18 @@
                     return dateB - dateA;
                 });
                 
-                if (episodes.length === 0) {
-                    console.warn('No episodes found in RSS feed');
-                    document.getElementById('loading').style.display = 'none';
-                    document.getElementById('error').style.display = 'block';
-                    document.getElementById('error').textContent = 'No episodes found in RSS feed';
-                    return;
-                }
-                
+                if (loadingEl) loadingEl.style.display = 'none';
+                if (errorEl) errorEl.style.display = 'none';
                 displayEpisodes(episodes);
             } catch (error) {
                 console.error('Error loading podcast:', error);
-                const loadingEl = document.getElementById('loading');
-                const errorEl = document.getElementById('error');
                 if (loadingEl) loadingEl.style.display = 'none';
                 if (errorEl) {
                     errorEl.style.display = 'block';
-                    errorEl.textContent = `Error loading podcast: ${error.message}`;
+                    errorEl.textContent = `Error loading podcast: ${error.message}. Please check the console for details.`;
+                }
+                if (episodesEl) {
+                    episodesEl.innerHTML = '<div class="error">Failed to load episodes. Please refresh the page.</div>';
                 }
             }
         }
@@ -505,39 +605,123 @@
             }
         }
         
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
         function displayEpisodes(episodes) {
             const container = document.getElementById('episodes');
             const loading = document.getElementById('loading');
             
-            loading.style.display = 'none';
+            if (loading) loading.style.display = 'none';
             
-            if (episodes.length === 0) {
-                container.innerHTML = '<div class="error">No episodes found</div>';
+            if (!episodes || episodes.length === 0) {
+                if (container) {
+                    container.innerHTML = '<div class="error">No episodes found</div>';
+                }
                 return;
             }
             
-            container.innerHTML = episodes.map((episode, index) => `
-                <div class="episode" data-index="${index}">
-                    <div class="episode-title">${episode.title}</div>
-                    <div class="episode-date">📅 ${episode.pubDate} ${episode.duration ? '• ⏱️ ' + episode.duration : ''}</div>
-                    <div class="episode-description">${episode.description}</div>
-                    <div class="player-controls">
-                        <button class="play-button" onclick="togglePlay(${index}, '${episode.audioUrl}', '${episode.title.replace(/'/g, "\\'")}')">
-                            ▶
-                        </button>
-                        <div class="progress-container">
-                            <div class="progress-bar" onclick="seek(event, ${index})">
-                                <div class="progress-fill" id="progress-${index}"></div>
-                            </div>
-                            <div class="time-display">
-                                <span id="current-${index}">0:00</span>
-                                <span id="total-${index}">${episode.duration || '0:00'}</span>
+            console.log('Displaying episodes:', episodes.length);
+            
+            // Clear container first
+            if (container) {
+                container.innerHTML = '';
+                
+                episodes.forEach((episode, index) => {
+                    const episodeDiv = document.createElement('div');
+                    episodeDiv.className = 'episode';
+                    episodeDiv.setAttribute('data-index', index);
+                    
+                    // Escape HTML to prevent XSS
+                    const title = escapeHtml(episode.title || 'Untitled Episode');
+                    const description = escapeHtml(episode.description || '');
+                    const pubDate = escapeHtml(episode.pubDate || '');
+                    const duration = escapeHtml(episode.duration || '0:00');
+                    const audioUrl = episode.audioUrl || '';
+                    
+                    episodeDiv.innerHTML = `
+                        <div class="episode-title">${title}</div>
+                        <div class="episode-date">📅 ${pubDate} ${duration ? '• ⏱️ ' + duration : ''}</div>
+                        <div class="episode-description">${description}</div>
+                        <div class="player-controls">
+                            <button class="play-button" data-index="${index}">
+                                ▶
+                            </button>
+                            <div class="progress-container">
+                                <div class="progress-bar" data-index="${index}">
+                                    <div class="progress-fill" id="progress-${index}"></div>
+                                </div>
+                                <div class="time-display">
+                                    <span id="current-${index}">0:00</span>
+                                    <span id="total-${index}">${duration}</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <audio id="audio-${index}" src="${episode.audioUrl}" preload="none"></audio>
-                </div>
-            `).join('');
+                        <audio id="audio-${index}" src="${audioUrl}" preload="none"></audio>
+                    `;
+                    
+                    container.appendChild(episodeDiv);
+                    
+                    // Add event listeners
+                    const playButton = episodeDiv.querySelector('.play-button');
+                    const progressBar = episodeDiv.querySelector('.progress-bar');
+                    const audio = episodeDiv.querySelector('audio');
+                    
+                    if (playButton && audio) {
+                        playButton.addEventListener('click', () => {
+                            togglePlay(index, audioUrl, title);
+                        });
+                    }
+                    
+                    if (progressBar && audio) {
+                        progressBar.addEventListener('click', (e) => {
+                            seek(e, index);
+                        });
+                    }
+                    
+                    // Update progress as audio plays
+                    if (audio) {
+                        audio.addEventListener('timeupdate', () => {
+                            updateProgress(index);
+                        });
+                        
+                        audio.addEventListener('loadedmetadata', () => {
+                            updateTotalTime(index);
+                        });
+                    }
+                });
+            }
+        }
+        
+        function updateProgress(index) {
+            const audio = document.getElementById(`audio-${index}`);
+            const progressFill = document.getElementById(`progress-${index}`);
+            const currentTimeEl = document.getElementById(`current-${index}`);
+            
+            if (audio && progressFill && currentTimeEl) {
+                const progress = (audio.currentTime / audio.duration) * 100;
+                progressFill.style.width = `${progress}%`;
+                currentTimeEl.textContent = formatTime(audio.currentTime);
+            }
+        }
+        
+        function updateTotalTime(index) {
+            const audio = document.getElementById(`audio-${index}`);
+            const totalTimeEl = document.getElementById(`total-${index}`);
+            
+            if (audio && totalTimeEl) {
+                totalTimeEl.textContent = formatTime(audio.duration);
+            }
+        }
+        
+        function formatTime(seconds) {
+            if (!seconds || isNaN(seconds)) return '0:00';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
         
         function togglePlay(index, audioUrl, title) {
@@ -716,32 +900,40 @@
         // Refresh stock price every 30 seconds
         setInterval(loadStockPrice, 30 * 1000);
         
-        // Initialize Twitter timeline widget
-        (function() {
-            function initTwitterWidgets() {
-                const container = document.getElementById('twitter-timeline-container');
-                if (!container) {
-                    console.warn('Twitter timeline container not found');
-                    return;
-                }
-                
-                if (window.twttr && window.twttr.widgets) {
-                    console.log('Loading Twitter widgets...');
-                    try {
-                        window.twttr.widgets.load(container);
-                        console.log('Twitter widgets load called');
-                    } catch (e) {
-                        console.error('Error loading Twitter widgets:', e);
-                    }
-                } else {
-                    console.log('Twitter widgets not ready yet, retrying...');
-                    setTimeout(initTwitterWidgets, 500);
-                }
+        // Load Twitter posts using iframe embed (more reliable than widgets.js)
+        function loadTwitterPosts() {
+            const container = document.getElementById('twitter-posts-container');
+            const loadingEl = document.getElementById('twitter-loading');
+            const postsEl = document.getElementById('twitter-posts');
+            const errorEl = document.getElementById('twitter-error');
+            
+            if (!container) {
+                console.warn('Twitter posts container not found');
+                return;
             }
+            
+            // Use Twitter's publish.twitter.com embed code
+            // This is more reliable than widgets.js
+            const embedCode = `
+                <a class="twitter-timeline" 
+                   data-theme="light" 
+                   data-tweet-limit="5" 
+                   data-chrome="noheader nofooter noscrollbar" 
+                   data-width="360"
+                   data-height="500"
+                   href="https://twitter.com/teslashortstime?ref_src=twsrc%5Etfw">
+                   Tweets by teslashortstime
+                </a>
+                <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+            `;
+            
+            // Create a wrapper div and inject the embed code
+            postsEl.innerHTML = '<div class="twitter-iframe-container"></div>';
+            const iframeContainer = postsEl.querySelector('.twitter-iframe-container');
             
             // Load Twitter widgets script
             if (!document.getElementById('twitter-wjs')) {
-                var script = document.createElement('script');
+                const script = document.createElement('script');
                 script.id = 'twitter-wjs';
                 script.src = 'https://platform.twitter.com/widgets.js';
                 script.async = true;
@@ -749,41 +941,78 @@
                 
                 script.onload = function() {
                     console.log('Twitter widgets script loaded');
-                    // Initialize twttr object
-                    window.twttr = window.twttr || {};
-                    window.twttr._e = window.twttr._e || [];
-                    window.twttr.ready = window.twttr.ready || function(f) {
-                        window.twttr._e.push(f);
-                    };
+                    if (loadingEl) loadingEl.style.display = 'none';
                     
-                    // Wait a bit for widgets to be available
-                    setTimeout(initTwitterWidgets, 1000);
+                    // Create the timeline link
+                    const timelineLink = document.createElement('a');
+                    timelineLink.className = 'twitter-timeline';
+                    timelineLink.setAttribute('data-theme', 'light');
+                    timelineLink.setAttribute('data-tweet-limit', '5');
+                    timelineLink.setAttribute('data-chrome', 'noheader nofooter noscrollbar');
+                    timelineLink.setAttribute('data-width', '360');
+                    timelineLink.setAttribute('data-height', '500');
+                    timelineLink.href = 'https://twitter.com/teslashortstime?ref_src=twsrc%5Etfw';
+                    timelineLink.textContent = 'Tweets by teslashortstime';
+                    
+                    iframeContainer.appendChild(timelineLink);
+                    
+                    // Initialize widgets
+                    if (window.twttr && window.twttr.widgets) {
+                        window.twttr.widgets.load(iframeContainer);
+                    } else {
+                        // Wait for twttr to be ready
+                        window.twttr = window.twttr || {};
+                        window.twttr._e = window.twttr._e || [];
+                        window.twttr.ready = window.twttr.ready || function(f) {
+                            window.twttr._e.push(f);
+                        };
+                        window.twttr.ready(function() {
+                            if (window.twttr && window.twttr.widgets) {
+                                window.twttr.widgets.load(iframeContainer);
+                            }
+                        });
+                    }
                 };
                 
                 script.onerror = function() {
                     console.error('Failed to load Twitter widgets script');
+                    if (loadingEl) loadingEl.style.display = 'none';
+                    if (errorEl) {
+                        errorEl.style.display = 'block';
+                        errorEl.textContent = 'Failed to load Twitter posts. Please refresh the page.';
+                    }
                 };
                 
                 document.head.appendChild(script);
             } else {
-                // Script already exists, try to initialize
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', function() {
-                        setTimeout(initTwitterWidgets, 2000);
-                    });
-                } else {
-                    setTimeout(initTwitterWidgets, 2000);
+                // Script already loaded, just create the timeline
+                if (loadingEl) loadingEl.style.display = 'none';
+                const timelineLink = document.createElement('a');
+                timelineLink.className = 'twitter-timeline';
+                timelineLink.setAttribute('data-theme', 'light');
+                timelineLink.setAttribute('data-tweet-limit', '5');
+                timelineLink.setAttribute('data-chrome', 'noheader nofooter noscrollbar');
+                timelineLink.setAttribute('data-width', '360');
+                timelineLink.setAttribute('data-height', '500');
+                timelineLink.href = 'https://twitter.com/teslashortstime?ref_src=twsrc%5Etfw';
+                timelineLink.textContent = 'Tweets by teslashortstime';
+                
+                iframeContainer.appendChild(timelineLink);
+                
+                if (window.twttr && window.twttr.widgets) {
+                    window.twttr.widgets.load(iframeContainer);
                 }
             }
-            
-            // Also use the ready callback if available
-            if (window.twttr && window.twttr.ready) {
-                window.twttr.ready(function() {
-                    console.log('Twitter widgets ready callback fired');
-                    setTimeout(initTwitterWidgets, 500);
-                });
-            }
-        })();
+        }
+        
+        // Load Twitter posts on page load
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(loadTwitterPosts, 500);
+            });
+        } else {
+            setTimeout(loadTwitterPosts, 500);
+        }
     </script>
 </body>
 </html>
