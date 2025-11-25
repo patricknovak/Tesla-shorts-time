@@ -325,7 +325,6 @@
             text-decoration: underline;
         }
     </style>
-    <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
 </head>
 <body>
     <div class="main-wrapper">
@@ -430,7 +429,15 @@
                     const pubDate = item.querySelector('pubDate')?.textContent || '';
                     const enclosure = item.querySelector('enclosure');
                     const audioUrl = enclosure?.getAttribute('url') || '';
-                    const duration = item.querySelector('itunes\\:duration, duration')?.textContent || '';
+                    
+                    // Try multiple ways to get duration (handle namespaces)
+                    let duration = '';
+                    const durationEl = item.querySelector('itunes\\:duration') || 
+                                     item.querySelector('duration') ||
+                                     item.getElementsByTagNameNS('http://www.itunes.com/dtds/podcast-1.0.dtd', 'duration')[0];
+                    if (durationEl) {
+                        duration = durationEl.textContent || '';
+                    }
                     
                     episodes.push({
                         title,
@@ -439,6 +446,13 @@
                         audioUrl,
                         duration
                     });
+                });
+                
+                // Sort episodes by date (newest first)
+                episodes.sort((a, b) => {
+                    const dateA = new Date(episodes.find(e => e.title === a.title)?.pubDate || 0);
+                    const dateB = new Date(episodes.find(e => e.title === b.title)?.pubDate || 0);
+                    return dateB - dateA;
                 });
                 
                 displayEpisodes(episodes);
@@ -565,8 +579,14 @@
             audio.currentTime = percent * audio.duration;
         }
         
-        // Load podcast on page load
-        loadPodcast();
+        // Load podcast on page load (wait for DOM to be ready)
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                loadPodcast();
+            });
+        } else {
+            loadPodcast();
+        }
         
         // Auto-refresh every 5 minutes to get new episodes
         setInterval(loadPodcast, 5 * 60 * 1000);
@@ -574,42 +594,70 @@
         // ========================== TSLA STOCK PRICE ==========================
         async function loadStockPrice() {
             try {
-                // Use Yahoo Finance API (unofficial but works)
-                const response = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/TSLA?interval=1d&range=1d');
+                // Use a CORS proxy or alternative API
+                // Try Alpha Vantage or Yahoo Finance with CORS proxy
+                const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                const yahooUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/TSLA?interval=1d&range=1d';
+                
+                const response = await fetch(proxyUrl + encodeURIComponent(yahooUrl));
                 if (!response.ok) throw new Error('Failed to fetch stock data');
                 
                 const data = await response.json();
+                
+                if (!data || !data.chart || !data.chart.result || data.chart.result.length === 0) {
+                    throw new Error('Invalid stock data format');
+                }
+                
                 const result = data.chart.result[0];
                 const meta = result.meta;
                 
-                const price = meta.regularMarketPrice || meta.previousClose;
-                const prevClose = meta.previousClose;
+                const price = meta.regularMarketPrice || meta.previousClose || meta.close;
+                const prevClose = meta.previousClose || meta.close;
                 const change = price - prevClose;
-                const changePercent = ((change / prevClose) * 100).toFixed(2);
+                const changePercent = prevClose ? ((change / prevClose) * 100).toFixed(2) : '0.00';
                 const marketCap = meta.marketCap ? formatMarketCap(meta.marketCap) : 'N/A';
                 const volume = meta.regularMarketVolume ? formatVolume(meta.regularMarketVolume) : 'N/A';
                 const high52 = meta.fiftyTwoWeekHigh ? `$${meta.fiftyTwoWeekHigh.toFixed(2)}` : 'N/A';
                 const low52 = meta.fiftyTwoWeekLow ? `$${meta.fiftyTwoWeekLow.toFixed(2)}` : 'N/A';
                 
                 // Update UI
-                document.getElementById('stock-loading').style.display = 'none';
-                document.getElementById('stock-data').style.display = 'block';
+                const loadingEl = document.getElementById('stock-loading');
+                const dataEl = document.getElementById('stock-data');
                 
-                document.getElementById('stock-price').textContent = `$${price.toFixed(2)}`;
-                
-                const changeElement = document.getElementById('stock-change');
-                const changeText = `${change >= 0 ? '+' : ''}$${change.toFixed(2)} (${changePercent >= 0 ? '+' : ''}${changePercent}%)`;
-                changeElement.textContent = changeText;
-                changeElement.className = `stock-change ${change >= 0 ? 'positive' : 'negative'}`;
-                
-                document.getElementById('market-cap').textContent = marketCap;
-                document.getElementById('volume').textContent = volume;
-                document.getElementById('high52').textContent = high52;
-                document.getElementById('low52').textContent = low52;
+                if (loadingEl) loadingEl.style.display = 'none';
+                if (dataEl) {
+                    dataEl.style.display = 'block';
+                    
+                    const priceEl = document.getElementById('stock-price');
+                    if (priceEl) priceEl.textContent = `$${price.toFixed(2)}`;
+                    
+                    const changeElement = document.getElementById('stock-change');
+                    if (changeElement) {
+                        const changeText = `${change >= 0 ? '+' : ''}$${change.toFixed(2)} (${changePercent >= 0 ? '+' : ''}${changePercent}%)`;
+                        changeElement.textContent = changeText;
+                        changeElement.className = `stock-change ${change >= 0 ? 'positive' : 'negative'}`;
+                    }
+                    
+                    const marketCapEl = document.getElementById('market-cap');
+                    if (marketCapEl) marketCapEl.textContent = marketCap;
+                    
+                    const volumeEl = document.getElementById('volume');
+                    if (volumeEl) volumeEl.textContent = volume;
+                    
+                    const high52El = document.getElementById('high52');
+                    if (high52El) high52El.textContent = high52;
+                    
+                    const low52El = document.getElementById('low52');
+                    if (low52El) low52El.textContent = low52;
+                }
                 
             } catch (error) {
                 console.error('Error loading stock price:', error);
-                document.getElementById('stock-loading').textContent = 'Unable to load stock data';
+                const loadingEl = document.getElementById('stock-loading');
+                if (loadingEl) {
+                    loadingEl.textContent = 'Unable to load stock data. Please refresh.';
+                    loadingEl.style.color = '#f5576c';
+                }
             }
         }
         
@@ -627,36 +675,52 @@
             return value.toLocaleString();
         }
         
-        // Load stock price on page load
-        loadStockPrice();
+        // Load stock price on page load (wait for DOM to be ready)
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                loadStockPrice();
+            });
+        } else {
+            loadStockPrice();
+        }
         
         // Refresh stock price every 30 seconds
         setInterval(loadStockPrice, 30 * 1000);
         
         // Initialize Twitter timeline widget
-        window.twttr = (function(d, s, id) {
-            var js, fjs = d.getElementsByTagName(s)[0],
-                t = window.twttr || {};
-            if (d.getElementById(id)) return t;
-            js = d.createElement(s);
-            js.id = id;
-            js.src = "https://platform.twitter.com/widgets.js";
-            fjs.parentNode.insertBefore(js, fjs);
-            
-            t._e = [];
-            t.ready = function(f) {
-                t._e.push(f);
-            };
-            
-            return t;
-        }(document, "script", "twitter-wjs"));
-        
-        // Wait for Twitter widgets to load, then render timeline
-        if (window.twttr) {
-            window.twttr.ready(function() {
+        (function() {
+            if (window.twttr && window.twttr.widgets) {
                 window.twttr.widgets.load();
-            });
-        }
+                return;
+            }
+            
+            window.twttr = (function(d, s, id) {
+                var js, fjs = d.getElementsByTagName(s)[0],
+                    t = window.twttr || {};
+                if (d.getElementById(id)) return t;
+                js = d.createElement(s);
+                js.id = id;
+                js.src = "https://platform.twitter.com/widgets.js";
+                js.async = true;
+                fjs.parentNode.insertBefore(js, fjs);
+                
+                t._e = [];
+                t.ready = function(f) {
+                    t._e.push(f);
+                };
+                
+                return t;
+            }(document, "script", "twitter-wjs"));
+            
+            // Wait for Twitter widgets to load, then render timeline
+            if (window.twttr && window.twttr.ready) {
+                window.twttr.ready(function() {
+                    if (window.twttr && window.twttr.widgets) {
+                        window.twttr.widgets.load();
+                    }
+                });
+            }
+        })();
     </script>
 </body>
 </html>
