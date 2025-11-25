@@ -34,6 +34,9 @@ TEST_MODE = False  # Set to False for full run
 # Set to False to disable X posting (thread will still be generated and saved)
 ENABLE_X_POSTING = True
 
+# Set to False to disable podcast generation and RSS feed updates
+ENABLE_PODCAST = True
+
 
 # ========================== PRONUNCIATION FIXER v2 – NEVER BREAKS NORMAL WORDS ==========================
 def fix_tesla_pronunciation(text: str) -> str:
@@ -771,7 +774,11 @@ else:
     logging.info("X posting is disabled (ENABLE_X_POSTING = False)")
 
 # ========================== 2. GENERATE PODCAST SCRIPT (NATURAL & FACT-BASED) ==========================
-POD_PROMPT = f"""
+if not ENABLE_PODCAST:
+    logging.info("Podcast generation is disabled (ENABLE_PODCAST = False). Skipping podcast script generation, audio processing, and RSS feed updates.")
+    final_mp3 = None
+else:
+    POD_PROMPT = f"""
 
 You are now writing an 8–11 minute (1950–2600 words, ~145–155 wpm) solo podcast script for “Tesla Shorts Time Daily” Episode {episode_num}.
 ### HOST PERSONA (NON-NEGOTIABLE)
@@ -1327,7 +1334,7 @@ else:
     logging.info("BROADCAST-QUALITY PODCAST CREATED – PROFESSIONAL MUSIC TRANSITIONS APPLIED")
 
 # ========================== 5. UPDATE RSS FEED ==========================
-if not TEST_MODE and final_mp3.exists():
+if ENABLE_PODCAST and not TEST_MODE and final_mp3 and final_mp3.exists():
     try:
         # Get audio duration
         audio_duration = get_audio_duration(final_mp3)
