@@ -576,7 +576,7 @@ def generate_raw_data_html(raw_data, output_dir):
         except:
             pass
     
-    html = f"""<!DOCTYPE html>
+    html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -743,9 +743,9 @@ def generate_raw_data_html(raw_data, output_dir):
     # Add archive links
     for archive_date in archive_dates:
         if archive_date["date"] != date_str:
-            html += f'                <a href="raw_data_{archive_date["date"]}.html" class="archive-link">{archive_date["formatted"]}</a>\n'
+            html_content += f'                <a href="raw_data_{archive_date["date"]}.html" class="archive-link">{archive_date["formatted"]}</a>\n'
     
-    html += """            </div>
+    html_content += """            </div>
         </div>
         
         <div class="stats">
@@ -772,7 +772,7 @@ def generate_raw_data_html(raw_data, output_dir):
         published = article.get("publishedAt", "Unknown")
         author = html.escape(article.get("author", "Unknown"))
         
-        html += f"""            <div class="article">
+        html_content += f"""            <div class="article">
                 <div class="article-title">{i}. {title}</div>
                 <div class="article-meta">
                     Source: {source} | Author: {author} | Published: {published}
@@ -782,7 +782,7 @@ def generate_raw_data_html(raw_data, output_dir):
             </div>
 """
     
-    html += """        </div>
+    html_content += """        </div>
         
         <div class="section">
             <h2>🐦 X Posts (Raw)</h2>
@@ -800,7 +800,7 @@ def generate_raw_data_html(raw_data, output_dir):
         retweets = post.get("retweets", 0)
         replies = post.get("replies", 0)
         
-        html += f"""            <div class="post">
+        html_content += f"""            <div class="post">
                 <div class="post-text">{i}. {text}</div>
                 <div class="post-meta">
                     @{username} ({name}) | {created_at} | 
@@ -811,7 +811,7 @@ def generate_raw_data_html(raw_data, output_dir):
             </div>
 """
     
-    html += """        </div>
+    html_content += """        </div>
         
         <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #666;">
             <p>Generated automatically by Tesla Shorts Time Daily</p>
@@ -821,7 +821,7 @@ def generate_raw_data_html(raw_data, output_dir):
 </body>
 </html>"""
     
-    return html
+    return html_content
 
 # Save raw data and generate HTML
 raw_json_path, raw_html_path = save_raw_data_and_generate_html(
