@@ -6,7 +6,7 @@
     <description>Daily Tesla news digest and podcast hosted by Patrick in Vancouver. Covering the latest Tesla developments, stock updates, and short squeeze celebrations.</description>
     <language>en-us</language>
     <copyright>Copyright 2025</copyright>
-    <lastBuildDate>Wed, 26 Nov 2025 05:24:20 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 26 Nov 2025 05:41:07 +0000</lastBuildDate>
     <itunes:author>Patrick</itunes:author>
     <itunes:summary>Daily Tesla news digest and podcast covering the latest developments, stock updates, and short squeeze celebrations.</itunes:summary>
     <itunes:owner>
@@ -24,7 +24,7 @@
       <description>Daily Tesla news digest for November 26, 2025. TSLA price: $419.40 +1.62 (+0.39%) . 🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939...</description>
       <pubDate>Wed, 26 Nov 2025 08:00:00 +0000</pubDate>
       <guid isPermaLink="false">tesla-shorts-time-ep330-20251126</guid>
-      <enclosure url="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/digests/digests/Tesla_Shorts_Time_Pod_Ep330_20251126.mp3" type="audio/mpeg" length="10170871" />
+      <enclosure url="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/digests/digests/Tesla_Shorts_Time_Pod_Ep330_20251126.mp3" type="audio/mpeg" length="8571551" />
       <itunes:title>Tesla Shorts Time Daily - Episode 330 - November 26, 2025</itunes:title>
       <itunes:summary>Daily Tesla news digest for November 26, 2025. TSLA price: $419.40 +1.62 (+0.39%) . 🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939...</itunes:summary>
       <itunes:duration>07:03</itunes:duration>
@@ -32,6 +32,8 @@
       <itunes:season>1</itunes:season>
       <itunes:episodeType>full</itunes:episodeType>
       <itunes:explicit>no</itunes:explicit>
+      <itunes:image href="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast-image.jpg" />
+      <itunes:season>1</itunes:season>
       <itunes:image href="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast-image.jpg" />
     </item>
     <item>
@@ -70,5 +72,6 @@
       <itunes:image href="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast-image.jpg" />
       <itunes:season>1</itunes:season>
     </item>
+    <itunes:image href="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast-image.jpg" />
   </channel>
 </rss>
