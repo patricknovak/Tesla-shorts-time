@@ -797,15 +797,21 @@ def validate_and_fix_links(digest_text: str, news_articles: list, x_posts: list)
                     is_valid = True
                     break
         
-        # If no pre-fetched X posts, validate X post URLs by format
+        # If no pre-fetched X posts, be VERY strict - only accept URLs that pass format validation
+        # But we'll still be conservative since we can't verify they're real
         if not is_valid and not has_prefetched_x_posts:
             # Check if it's an X post URL
             if 'x.com' in url_clean or 'twitter.com' in url_clean:
                 if validate_x_post_url(url_clean):
+                    # Format is valid, but we can't verify it's real
+                    # Accept it but log a warning
                     is_valid = True
-                    logging.info(f"✅ Validated X post URL from web search: {url_clean}")
+                    logging.warning(f"⚠️  Accepted X post URL from web search (format valid, but unverified): {url_clean}")
                 else:
                     logging.warning(f"❌ Invalid X post URL format: {url_clean}")
+            else:
+                # Not an X post URL, but also not in pre-fetched news - mark as invalid
+                logging.warning(f"❌ URL not found in pre-fetched data and not a valid X post URL: {url_clean}")
         
         # If still not valid, mark for removal
         if not is_valid:
@@ -896,14 +902,40 @@ def format_digest_for_x(digest: str) -> str:
     # Add separator before Inspiration Quote
     formatted = re.sub(r'(\n\n)(✨ \*\*Inspiration Quote:\*\*)', separator + r'\2', formatted)
     
-    # Ensure numbered lists are properly formatted
-    # Fix news items: ensure they're numbered 1. 2. 3. etc. (not just bullet points)
-    # Look for patterns like "1." or "1 " at the start of lines in the news section
-    # This regex ensures numbered format: number followed by period and space
-    formatted = re.sub(r'^(\d+)[\.\s]+(?=\*\*[^📰🐦📉📈💪])', r'\1. ', formatted, flags=re.MULTILINE)
+    # Add emoji to numbered list items for news (1️⃣, 2️⃣, etc.)
+    emoji_numbers = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
+    for i in range(1, 6):
+        emoji_num = emoji_numbers[i-1]
+        # Match numbered items in news section (before X Posts section)
+        pattern = rf'^(\s*){i}\.\s+(?=.*📰|.*Top 5 News|.*Top 10 X Posts)'
+        replacement = rf'\1{emoji_num} '
+        formatted = re.sub(pattern, replacement, formatted, flags=re.MULTILINE)
+        # Also match if it's just a number followed by period at start of line in news context
+        pattern2 = rf'^(\s*){i}\.\s+(?=\*\*)'
+        # Only apply if we're in the news section (before X Posts)
+        if '📰' in formatted or 'Top 5 News' in formatted:
+            # Find the news section and apply emojis there
+            news_section_match = re.search(r'(📰.*?Top 5 News Items.*?)(🐦|Top 10 X Posts)', formatted, re.DOTALL)
+            if news_section_match:
+                news_section = news_section_match.group(1)
+                news_section_formatted = re.sub(rf'^(\s*){i}\.\s+', rf'\1{emoji_num} ', news_section, flags=re.MULTILINE)
+                formatted = formatted.replace(news_section_match.group(1), news_section_formatted)
     
-    # Ensure X posts are numbered correctly (1. 2. 3. etc.)
-    # The numbering should already be in the prompt, but we'll ensure consistency
+    # Add emoji to numbered list items for X posts (1️⃣, 2️⃣, etc.)
+    for i in range(1, 11):
+        emoji_num = emoji_numbers[i-1] if i <= 10 else f'{i}'
+        # Match numbered items in X posts section
+        pattern = rf'^(\s*){i}\.\s+(?=.*🐦|.*Top 10 X Posts)'
+        replacement = rf'\1{emoji_num} '
+        formatted = re.sub(pattern, replacement, formatted, flags=re.MULTILINE)
+        # Also match if it's in the X posts section context
+        if '🐦' in formatted or 'Top 10 X Posts' in formatted:
+            # Find the X posts section and apply emojis there
+            x_section_match = re.search(r'(🐦.*?Top 10 X Posts.*?)(📉|Short Spot|━━)', formatted, re.DOTALL)
+            if x_section_match:
+                x_section = x_section_match.group(1)
+                x_section_formatted = re.sub(rf'^(\s*){i}\.\s+', rf'\1{emoji_num} ', x_section, flags=re.MULTILINE)
+                formatted = formatted.replace(x_section_match.group(1), x_section_formatted)
     
     # Clean up excessive newlines (more than 3 consecutive becomes 2)
     formatted = re.sub(r'\n{4,}', '\n\n', formatted)
