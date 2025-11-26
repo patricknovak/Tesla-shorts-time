@@ -874,33 +874,40 @@ def format_digest_for_x(digest: str) -> str:
     formatted = re.sub(r'\*\*Inspiration Quote:\*\*', '✨ **Inspiration Quote:**', formatted)
     
     # Add separator lines before major sections
+    separator = '\n\n━━━━━━━━━━━━━━━━━━━━\n\n'
+    
     # First, remove any existing separators to avoid duplicates
     formatted = re.sub(r'\n\n━━━━━━━━━━━━━━━━━━━━\n\n+', '\n\n', formatted)
     
-    separator = '\n\n━━━━━━━━━━━━━━━━━━━━\n\n'
-    
-    # Add separator before Top 5 News Items (check both formatted and unformatted versions)
-    formatted = re.sub(r'(\n\n)(📰 \*\*Top 5 News Items\*\*)', separator + r'\2', formatted)
-    formatted = re.sub(r'(\n\n)(### Top 5 News Items)', separator + r'\2', formatted)
+    # Add separator before Top 5 News Items (check multiple patterns)
+    formatted = re.sub(r'(\n\n?)(📰 \*\*Top 5 News Items\*\*)', separator + r'\2', formatted)
+    formatted = re.sub(r'(\n\n?)(### Top 5 News Items)', separator + r'\2', formatted)
+    # Also match after podcast link
+    formatted = re.sub(r'(Podcast Link:.*?\n)(📰|\*\*Top 5 News|### Top 5 News)', separator + r'\2', formatted, flags=re.DOTALL)
     
     # Add separator before Top 10 X Posts
-    formatted = re.sub(r'(\n\n)(🐦 \*\*Top 10 X Posts\*\*)', separator + r'\2', formatted)
-    formatted = re.sub(r'(\n\n)(### Top 10 X Posts)', separator + r'\2', formatted)
+    formatted = re.sub(r'(\n\n?)(🐦 \*\*Top 10 X Posts\*\*)', separator + r'\2', formatted)
+    formatted = re.sub(r'(\n\n?)(### Top 10 X Posts)', separator + r'\2', formatted)
+    # Also match after last news item (5.)
+    formatted = re.sub(r'(5[️⃣\.]\s+.*?\n)(🐦|\*\*Top 10 X Posts|### Top 10 X Posts)', separator + r'\2', formatted, flags=re.DOTALL)
     
     # Add separator before Short Spot
-    formatted = re.sub(r'(\n\n)(📉 \*\*Short Spot\*\*)', separator + r'\2', formatted)
-    formatted = re.sub(r'(\n\n)(## Short Spot)', separator + r'\2', formatted)
+    formatted = re.sub(r'(\n\n?)(📉 \*\*Short Spot\*\*)', separator + r'\2', formatted)
+    formatted = re.sub(r'(\n\n?)(## Short Spot)', separator + r'\2', formatted)
+    # Also match after last X post (10.)
+    formatted = re.sub(r'(10[️⃣\.]\s+.*?\n)(📉|\*\*Short Spot|## Short Spot)', separator + r'\2', formatted, flags=re.DOTALL)
     
     # Add separator before Short Squeeze
-    formatted = re.sub(r'(\n\n)(📈 \*\*Short Squeeze\*\*)', separator + r'\2', formatted)
-    formatted = re.sub(r'(\n\n)(### Short Squeeze)', separator + r'\2', formatted)
+    formatted = re.sub(r'(\n\n?)(📈 \*\*Short Squeeze\*\*)', separator + r'\2', formatted)
+    formatted = re.sub(r'(\n\n?)(### Short Squeeze)', separator + r'\2', formatted)
     
     # Add separator before Daily Challenge
-    formatted = re.sub(r'(\n\n)(💪 \*\*Daily Challenge\*\*)', separator + r'\2', formatted)
-    formatted = re.sub(r'(\n\n)(### Daily Challenge)', separator + r'\2', formatted)
+    formatted = re.sub(r'(\n\n?)(💪 \*\*Daily Challenge\*\*)', separator + r'\2', formatted)
+    formatted = re.sub(r'(\n\n?)(### Daily Challenge)', separator + r'\2', formatted)
     
     # Add separator before Inspiration Quote
-    formatted = re.sub(r'(\n\n)(✨ \*\*Inspiration Quote:\*\*)', separator + r'\2', formatted)
+    formatted = re.sub(r'(\n\n?)(✨ \*\*Inspiration Quote:\*\*)', separator + r'\2', formatted)
+    formatted = re.sub(r'(\n\n?)(\*\*Inspiration Quote:\*\*)', separator + r'\2', formatted)
     
     # Add emoji to numbered list items for news (1️⃣, 2️⃣, etc.)
     emoji_numbers = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
