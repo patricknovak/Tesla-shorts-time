@@ -565,7 +565,7 @@ Add a blank line after the sign-off.
 ### FINAL VALIDATION BEFORE OUTPUT (MANDATORY)
 Before outputting, verify:
 1. ✅ Exactly 5 news items are included (numbered 1. 2. 3. 4. 5.) - each covering a DIFFERENT story
-2. ✅ Exactly 10 X posts are included (numbered 1. 2. 3. 4. 5. 6. 7. 8. 9. 10.) - THIS IS CRITICAL AND MANDATORY - each covering a DIFFERENT topic/angle
+2. ✅ X posts section includes all available pre-fetched X posts (up to 10 maximum). If 0 posts are available, the section may be empty or skipped. Each post covers a DIFFERENT topic/angle.
 3. ✅ All numbered lists use the format "1. " (number, period, space) - NOT bullet points or other formats
 4. ✅ Separator lines "━━━━━━━━━━━━━━━━━━━━" are included before each major section
 5. ✅ NO DUPLICATES: Each news item and X post covers a unique story/angle (no two items about the same news event)
@@ -574,7 +574,7 @@ Before outputting, verify:
 8. ✅ Daily Challenge section is included
 9. ✅ Inspiration Quote is included
 
-**SIMILARITY CHECK**: Review all 5 news items and all 10 X posts. If any two items cover the same story or make the same point, replace one with a different item. Each item must be unique.
+**SIMILARITY CHECK**: Review all 5 news items and all X posts (if any). If any two items cover the same story or make the same point, replace one with a different item. Each item must be unique.
 
 **CRITICAL URL RULES:**
 - For each news item, you MUST use the exact URL from the pre-fetched article list above
