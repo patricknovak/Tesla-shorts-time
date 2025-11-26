@@ -531,6 +531,7 @@ You are an elite Tesla news curator producing the daily "Tesla Shorts Time" news
 - **EXACTLY 5 unique news articles** from the pre-fetched list (prioritize highest quality sources)
 - **X POSTS: If you have pre-fetched X posts available, use ALL of them (up to 10 maximum). If you have 0 pre-fetched X posts, you MUST use web search to find exactly 10 X posts from the last 24 hours.**
 - **CRITICAL: When using web search for X posts, you MUST find real X post URLs (format: https://x.com/username/status/ID) from the last 24 hours. DO NOT make up or hallucinate URLs.**
+- **CRITICAL: All X post URLs MUST be in the exact format: https://x.com/username/status/ID where username is 1-15 characters and ID is a numeric status ID. Invalid URLs will be automatically removed.**
 - **CRITICAL: If there are 0 pre-fetched X posts, you MUST still output exactly 10 X posts by using web search to find real X posts from the last 24 hours.**
 - **NEVER invent URLs or links - only use the exact URLs provided in the pre-fetched data**
 
@@ -651,7 +652,8 @@ Before outputting, verify:
 - For each news item, you MUST use the exact URL from the pre-fetched article list above
 - For X posts: If pre-fetched X posts are available, use those exact URLs. If NO pre-fetched X posts are available (0 posts), you MUST use web search to find real X post URLs (format: https://x.com/username/status/ID) from the last 24 hours
 - NEVER modify URLs, shorten them, or create new ones
-- All URLs must be real and accessible - verify them through web search if needed
+- All X post URLs must be in the exact format: https://x.com/username/status/ID (or https://twitter.com/username/status/ID). The username must be 1-15 alphanumeric characters/underscores, and the status ID must be a numeric ID (15-20 digits)
+- All URLs must be real and accessible - verify them through web search if needed. Invalid URLs will be automatically removed from the output.
 - If you have fewer than 10 pre-fetched X posts but more than 0, output exactly that many (numbered 1, 2, 3, etc.). If you have 0 pre-fetched posts, you MUST find 10 via web search.
 
 Now produce today's edition following every rule above exactly. Remember: If you have pre-fetched X posts, use them. If you have 0 pre-fetched X posts, you MUST use web search to find exactly 10 real X posts from the last 24 hours. DO NOT invent or hallucinate any URLs - all URLs must be real and accessible.
@@ -694,12 +696,47 @@ x_thread = "\n".join(lines).strip()
 # ========================== VALIDATE AND FIX LINKS ==========================
 logging.info("Validating and fixing links in the generated digest...")
 
-def validate_and_fix_links(digest_text: str, news_articles: list, x_posts: list) -> str:
+def validate_x_post_url(url: str) -> bool:
     """
-    Validate all URLs in the digest and replace with correct URLs from pre-fetched data.
-    Returns the corrected digest text.
+    Validate that an X post URL is in the correct format and appears to be real.
+    Format: https://x.com/username/status/ID or https://twitter.com/username/status/ID
+    Returns True if valid, False otherwise.
     """
     import re
+    
+    # Clean URL
+    url_clean = url.rstrip('.,;:!?)').strip()
+    
+    # Check format: https://x.com/username/status/ID or https://twitter.com/username/status/ID
+    x_pattern = r'https?://(x\.com|twitter\.com)/([a-zA-Z0-9_]+)/status/(\d+)'
+    match = re.match(x_pattern, url_clean)
+    
+    if not match:
+        return False
+    
+    # Extract components
+    domain, username, status_id = match.groups()
+    
+    # Validate username (X usernames are 1-15 alphanumeric/underscore)
+    if not re.match(r'^[a-zA-Z0-9_]{1,15}$', username):
+        return False
+    
+    # Validate status ID (should be numeric, typically 19-20 digits)
+    if not re.match(r'^\d{15,20}$', status_id):
+        return False
+    
+    return True
+
+def validate_and_fix_links(digest_text: str, news_articles: list, x_posts: list) -> str:
+    """
+    Validate all URLs in the digest and remove invalid ones.
+    When X posts are from web search (0 pre-fetched), validate X post URLs by format.
+    Returns the corrected digest text with invalid URLs removed.
+    """
+    import re
+    
+    # Track if we have pre-fetched X posts
+    has_prefetched_x_posts = len(x_posts) > 0
     
     # Create URL mapping from pre-fetched data
     news_url_map = {}
@@ -726,7 +763,7 @@ def validate_and_fix_links(digest_text: str, news_articles: list, x_posts: list)
     
     # Track issues
     invalid_urls = []
-    fixed_count = 0
+    removed_count = 0
     
     # Check each URL
     for url in urls_found:
@@ -738,24 +775,45 @@ def validate_and_fix_links(digest_text: str, news_articles: list, x_posts: list)
         
         # Check if URL is in pre-fetched data
         is_valid = False
+        
+        # Check news articles
         for article in news_articles:
             if url_clean == article.get('url', ''):
                 is_valid = True
                 break
         
-        if not is_valid:
+        # Check X posts if we have pre-fetched ones
+        if not is_valid and has_prefetched_x_posts:
             for post in x_posts:
                 if url_clean == post.get('url', ''):
                     is_valid = True
                     break
         
+        # If no pre-fetched X posts, validate X post URLs by format
+        if not is_valid and not has_prefetched_x_posts:
+            # Check if it's an X post URL
+            if 'x.com' in url_clean or 'twitter.com' in url_clean:
+                if validate_x_post_url(url_clean):
+                    is_valid = True
+                    logging.info(f"✅ Validated X post URL from web search: {url_clean}")
+                else:
+                    logging.warning(f"❌ Invalid X post URL format: {url_clean}")
+        
+        # If still not valid, mark for removal
         if not is_valid:
             invalid_urls.append(url_clean)
-            logging.warning(f"Found potentially invalid URL in digest: {url_clean}")
+            # Remove the invalid URL from the digest
+            # Remove URL and any trailing punctuation
+            url_pattern_escaped = re.escape(url_clean)
+            # Remove URL with optional trailing punctuation
+            digest_text = re.sub(url_pattern_escaped + r'[.,;:!?)]*', '[URL REMOVED - INVALID]', digest_text)
+            removed_count += 1
     
     if invalid_urls:
-        logging.warning(f"Found {len(invalid_urls)} potentially invalid URLs. These may need manual review.")
-        logging.warning(f"Invalid URLs: {invalid_urls[:5]}...")  # Log first 5
+        logging.warning(f"⚠️  Found and removed {removed_count} invalid URLs from digest")
+        logging.warning(f"Invalid URLs removed: {invalid_urls[:10]}...")  # Log first 10
+    else:
+        logging.info("✅ All URLs validated successfully")
     
     return digest_text
 
