@@ -712,8 +712,10 @@ def validate_x_post_url(url: str) -> bool:
     """
     import re
     
-    # Clean URL
+    # Clean URL - remove markdown link syntax if present
     url_clean = url.rstrip('.,;:!?)').strip()
+    # Remove markdown link syntax like ](url or ](https://...
+    url_clean = re.sub(r'\]\(.*$', '', url_clean).strip()
     
     # Check format: https://x.com/username/status/ID or https://twitter.com/username/status/ID
     x_pattern = r'https?://(x\.com|twitter\.com)/([a-zA-Z0-9_]+)/status/(\d+)'
@@ -731,6 +733,12 @@ def validate_x_post_url(url: str) -> bool:
     
     # Validate status ID (should be numeric, typically 19-20 digits)
     if not re.match(r'^\d{15,20}$', status_id):
+        return False
+    
+    # Check for suspicious patterns - real X status IDs are usually not round numbers
+    # Status IDs ending in many zeros are likely fake
+    if status_id.endswith('0000000000') or status_id.endswith('000000000'):
+        logging.warning(f"⚠️  Suspicious X post URL with round number status ID: {url_clean}")
         return False
     
     return True
