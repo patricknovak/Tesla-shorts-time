@@ -820,6 +820,11 @@ def validate_and_fix_links(digest_text: str, news_articles: list, x_posts: list)
     if invalid_urls:
         logging.warning(f"⚠️  Found and removed {removed_count} invalid URLs from digest")
         logging.warning(f"Invalid URLs removed: {invalid_urls[:10]}...")  # Log first 10
+        
+        # Count X post URLs in the digest to check if we removed too many
+        x_url_count = len([url for url in invalid_urls if 'x.com' in url or 'twitter.com' in url])
+        if x_url_count > 5:
+            logging.error(f"❌ WARNING: Removed {x_url_count} invalid X post URLs. This suggests hallucinations. The digest may have fewer X posts than expected.")
     else:
         logging.info("✅ All URLs validated successfully")
     
