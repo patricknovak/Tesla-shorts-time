@@ -881,6 +881,27 @@ def format_digest_for_x(digest: str) -> str:
     # Format podcast link with emoji
     formatted = re.sub(r'Tesla Shorts Time Daily Podcast Link:', '🎙️ Tesla Shorts Time Daily Podcast Link:', formatted)
     
+    # Ensure podcast link is always present (add it if missing)
+    podcast_link = '🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939'
+    if 'podcasts.apple.com/us/podcast/tesla-shorts-time' not in formatted:
+        # Find the price line and add podcast link after it
+        price_pattern = r'(\*\*REAL-TIME TSLA price:\*\*[^\n]+\n)'
+        if re.search(price_pattern, formatted):
+            formatted = re.sub(price_pattern, r'\1' + podcast_link + '\n\n', formatted)
+        else:
+            # If price line not found, add after date line
+            date_pattern = r'(\*\*Date:\*\*[^\n]+\n)'
+            if re.search(date_pattern, formatted):
+                formatted = re.sub(date_pattern, r'\1' + podcast_link + '\n\n', formatted)
+            else:
+                # If neither found, add after header
+                header_pattern = r'(🚗⚡ \*\*Tesla Shorts Time\*\*\n)'
+                if re.search(header_pattern, formatted):
+                    formatted = re.sub(header_pattern, r'\1' + podcast_link + '\n\n', formatted)
+                else:
+                    # Last resort: add at the beginning
+                    formatted = podcast_link + '\n\n' + formatted
+    
     # Format section headers with emojis (preserve existing markdown)
     formatted = re.sub(r'^### Top 5 News Items', '📰 **Top 5 News Items**', formatted, flags=re.MULTILINE)
     formatted = re.sub(r'^### Top 10 X Posts', '🐦 **Top 10 X Posts**', formatted, flags=re.MULTILINE)
