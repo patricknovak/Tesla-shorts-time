@@ -548,10 +548,48 @@
             color: var(--tesla-red);
         }
         
+        /* Mobile Menu Toggle */
+        .menu-toggle {
+            display: none;
+            background: var(--tesla-red);
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
         /* Responsive Design */
         @media (max-width: 768px) {
+            .menu-toggle {
+                display: block;
+            }
+            
             .nav-links {
                 display: none;
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                background: rgba(0, 0, 0, 0.98);
+                flex-direction: column;
+                padding: 1rem;
+                border-top: 2px solid var(--tesla-red);
+            }
+            
+            .nav-links.active {
+                display: flex;
+            }
+            
+            .nav-links li {
+                width: 100%;
+            }
+            
+            .nav-links a {
+                display: block;
+                padding: 0.75rem;
+                border-bottom: 1px solid var(--tesla-gray);
             }
             
             .hero {
@@ -819,11 +857,13 @@
             <a href="#home" class="logo">
                 ⚡ TS
             </a>
-            <ul class="nav-links">
+            <button class="menu-toggle" aria-label="Toggle menu">☰</button>
+            <ul class="nav-links" id="navLinks">
                 <li><a href="#episodes">Episodes</a></li>
                 <li><a href="#highlights">Highlights</a></li>
                 <li><a href="#news">News</a></li>
                 <li><a href="#resources">Resources</a></li>
+                <li><a href="./digests/digests/raw_data_index.html" target="_blank" style="color: var(--tesla-red); font-weight: 600;">📊 Raw Data</a></li>
                 <li><a href="#about">About</a></li>
                 <li><a href="#subscribe">Subscribe</a></li>
             </ul>
@@ -953,6 +993,19 @@
         </div>
         
         <div class="resources-grid" data-aos="fade-up">
+            <div class="resource-card" style="border: 3px solid var(--tesla-red); background: rgba(227, 25, 55, 0.1); grid-column: 1 / -1; max-width: 100%;">
+                <h3 style="color: var(--tesla-red); font-size: 1.5rem; margin-bottom: 1rem;">📊 Raw News & X Posts Archive</h3>
+                <p style="color: var(--tesla-text-light); font-size: 1rem; margin-bottom: 1.5rem; line-height: 1.6;">
+                    Explore the complete, unfiltered daily archive of all Tesla news articles and X posts used to generate each digest. 
+                    This archive shows the raw data sources before any filtering, deduplication, or curation—providing full transparency 
+                    into the news gathering process. Browse by date to see what sources were available each day.
+                </p>
+                <a href="./digests/digests/raw_data_index.html" target="_blank" class="btn btn-primary" style="display: inline-block; text-decoration: none; margin-right: 10px;">View Raw Data Archive →</a>
+                <a href="https://github.com/patricknovak/Tesla-shorts-time/tree/main/digests/digests" target="_blank" class="btn btn-secondary" style="display: inline-block; text-decoration: none;">View on GitHub →</a>
+                <p style="color: var(--tesla-gray-light); font-size: 0.85rem; margin-top: 1rem;">
+                    Note: Files are generated automatically when the daily workflow runs. If no data appears, check back after the next digest is published.
+                </p>
+            </div>
             <div class="resource-card">
                 <h3>📊 TSLA Filings</h3>
                 <p><a href="https://www.sec.gov/cgi-bin/browse-edgar?company=tesla&owner=exclude&action=getcompany" target="_blank">SEC Filings</a></p>
@@ -1031,6 +1084,7 @@
                 <a href="https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939" target="_blank">🍎 Apple Podcasts</a>
                 <a href="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast.rss" target="_blank">📡 RSS Feed</a>
                 <a href="https://x.com/teslashortstime" target="_blank">🐦 X / Twitter</a>
+                <a href="./digests/digests/raw_data_index.html" target="_blank">📊 Raw Data Archive</a>
                 <a href="https://github.com/patricknovak/Tesla-shorts-time" target="_blank">💻 GitHub</a>
             </div>
             <p class="footer-text">Tesla Shorts Time Daily © 2025 | Hosted by Dan and Patrick</p>
@@ -1467,6 +1521,22 @@
                     easing: 'ease-in-out',
                     once: true,
                     offset: 100
+                });
+            }
+            
+            // Mobile menu toggle
+            const menuToggle = document.querySelector('.menu-toggle');
+            const navLinks = document.getElementById('navLinks');
+            if (menuToggle && navLinks) {
+                menuToggle.addEventListener('click', function() {
+                    navLinks.classList.toggle('active');
+                });
+                
+                // Close menu when clicking a link
+                navLinks.querySelectorAll('a').forEach(link => {
+                    link.addEventListener('click', function() {
+                        navLinks.classList.remove('active');
+                    });
                 });
             }
         });
