@@ -714,8 +714,10 @@ def validate_x_post_url(url: str) -> bool:
     
     # Clean URL - remove markdown link syntax if present
     url_clean = url.rstrip('.,;:!?)').strip()
-    # Remove markdown link syntax like ](url or ](https://...
+    # Remove markdown link syntax like ](url or ](https://... if it got included
     url_clean = re.sub(r'\]\(.*$', '', url_clean).strip()
+    # Remove any trailing brackets or parentheses that might be from markdown
+    url_clean = url_clean.rstrip('])').strip()
     
     # Check format: https://x.com/username/status/ID or https://twitter.com/username/status/ID
     x_pattern = r'https?://(x\.com|twitter\.com)/([a-zA-Z0-9_]+)/status/(\d+)'
@@ -774,8 +776,16 @@ def validate_and_fix_links(digest_text: str, news_articles: list, x_posts: list)
             x_url_map[text_snippet] = post.get('url', '')
     
     # Find all URLs in the digest
-    url_pattern = r'https?://[^\s\)]+'
+    # Also handle markdown link syntax like [text](url)
+    url_pattern = r'https?://[^\s\)\]]+'
     urls_found = re.findall(url_pattern, digest_text)
+    
+    # Also find markdown links and extract the URL part
+    markdown_link_pattern = r'\[([^\]]+)\]\((https?://[^\s\)]+)\)'
+    markdown_links = re.findall(markdown_link_pattern, digest_text)
+    for text, url in markdown_links:
+        if url not in urls_found:
+            urls_found.append(url)
     
     # Track issues
     invalid_urls = []
