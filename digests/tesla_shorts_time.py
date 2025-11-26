@@ -1160,6 +1160,10 @@ def update_rss_feed(
                     f.write(content)
                 logging.info(f"RSS feed updated (existing episode) → {rss_path}")
                 logging.info(f"RSS feed contains {len(channel.findall('item'))} episode(s)")
+                # Force file modification time update to ensure git detects the change
+                import os
+                os.utime(rss_path, None)
+                logging.info(f"RSS feed file timestamp updated to ensure git detects changes")
             except Exception as e:
                 logging.error(f"Failed to write RSS feed to {rss_path}: {e}", exc_info=True)
                 raise
@@ -1269,8 +1273,13 @@ def update_rss_feed(
         with open(rss_path, "w", encoding="utf-8") as f:
             f.write(content)
         
+        # Force file modification time update to ensure git detects the change
+        import os
+        os.utime(rss_path, None)
+        
         logging.info(f"RSS feed updated → {rss_path}")
         logging.info(f"RSS feed contains {len(channel.findall('item'))} episode(s)")
+        logging.info(f"RSS feed file timestamp updated to ensure git detects changes")
     except Exception as e:
         logging.error(f"Failed to write RSS feed to {rss_path}: {e}", exc_info=True)
         raise

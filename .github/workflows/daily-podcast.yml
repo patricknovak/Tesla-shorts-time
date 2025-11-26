@@ -115,11 +115,21 @@ jobs:
         git add digests/digests/*.md digests/digests/*.mp3 digests/digests/*.txt 2>/dev/null || true
         # Also check for files directly in digests/ (older format)
         git add digests/*.md digests/*.mp3 digests/*.txt 2>/dev/null || true
-        # Add RSS feed file
+        # ALWAYS add RSS feed file (even if it was just updated, not new)
         git add podcast.rss 2>/dev/null || true
         echo "Staged files:"
         git diff --staged --name-only || echo "No files staged"
-        if ! git diff --staged --quiet; then
+        # Check if RSS feed has changes (even if not staged, it might have been modified)
+        if git diff --name-only | grep -q "podcast.rss" || git diff --staged --name-only | grep -q "podcast.rss"; then
+          echo "📡 RSS feed has changes - will be committed"
+        fi
+        # Check if there are any changes to commit
+        if ! git diff --staged --quiet || ! git diff --quiet podcast.rss; then
+          # If RSS feed has changes but isn't staged, stage it
+          if ! git diff --staged --name-only | grep -q "podcast.rss"; then
+            git add podcast.rss
+            echo "📡 Staged RSS feed changes"
+          fi
           git commit -m "Auto-generated: Tesla Shorts Time $(date +%Y-%m-%d)" || echo "Commit failed (may be empty)"
           git push || echo "Push failed"
           echo "✅ Files committed and pushed successfully to repository!"
