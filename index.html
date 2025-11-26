@@ -425,14 +425,6 @@
                         <div class="stock-change" id="stock-change">+$0.00 (0.00%)</div>
                         <div class="stock-info">
                             <div class="stock-info-item">
-                                <div class="stock-info-label">Market Cap</div>
-                                <div class="stock-info-value" id="market-cap">-</div>
-                            </div>
-                            <div class="stock-info-item">
-                                <div class="stock-info-label">Volume</div>
-                                <div class="stock-info-value" id="volume">-</div>
-                            </div>
-                            <div class="stock-info-item">
                                 <div class="stock-info-label">52W High</div>
                                 <div class="stock-info-value" id="high52">-</div>
                             </div>
@@ -447,12 +439,26 @@
             
             <div class="twitter-sidebar">
                 <div class="twitter-header">
-                    <h2>🐦 Latest Posts from @teslashortstime</h2>
+                    <h2>🐦 Follow @teslashortstime</h2>
                 </div>
-                <div class="twitter-posts-container" id="twitter-posts-container">
-                    <div id="twitter-loading" class="loading">Loading posts...</div>
-                    <div id="twitter-posts"></div>
-                    <div id="twitter-error" class="error" style="display: none;"></div>
+                <div class="twitter-link-container">
+                    <a href="https://x.com/teslashortstime" target="_blank" rel="noopener noreferrer" class="twitter-link">
+                        <span class="twitter-link-icon">🐦</span>
+                        <span class="twitter-link-text">View @teslashortstime on X</span>
+                    </a>
+                </div>
+            </div>
+            
+            <div class="referral-sidebar">
+                <div class="referral-header">
+                    <h2>🚗 Tesla Referral</h2>
+                </div>
+                <div class="referral-content">
+                    <p class="referral-description">Get 3 months free Full Self Driving or $650 off your Tesla purchase!</p>
+                    <a href="https://ts.la/patrick84289" target="_blank" rel="noopener noreferrer" class="referral-link">
+                        <span class="referral-link-icon">🔗</span>
+                        <span class="referral-link-text">Use Referral Link</span>
+                    </a>
                 </div>
             </div>
         </div>
@@ -848,12 +854,6 @@
                         changeElement.className = `stock-change ${change >= 0 ? 'positive' : 'negative'}`;
                     }
                     
-                    const marketCapEl = document.getElementById('market-cap');
-                    if (marketCapEl) marketCapEl.textContent = marketCap;
-                    
-                    const volumeEl = document.getElementById('volume');
-                    if (volumeEl) volumeEl.textContent = volume;
-                    
                     const high52El = document.getElementById('high52');
                     if (high52El) high52El.textContent = high52;
                     
@@ -896,105 +896,6 @@
         
         // Refresh stock price every 30 seconds
         setInterval(loadStockPrice, 30 * 1000);
-        
-        // Load Twitter posts using iframe embed (more reliable than widgets.js)
-        function loadTwitterPosts() {
-            const container = document.getElementById('twitter-posts-container');
-            const loadingEl = document.getElementById('twitter-loading');
-            const postsEl = document.getElementById('twitter-posts');
-            const errorEl = document.getElementById('twitter-error');
-            
-            if (!container) {
-                console.warn('Twitter posts container not found');
-                return;
-            }
-            
-            // Create a wrapper div for the Twitter timeline
-            postsEl.innerHTML = '<div class="twitter-iframe-container"></div>';
-            const iframeContainer = postsEl.querySelector('.twitter-iframe-container');
-            
-            // Load Twitter widgets script
-            if (!document.getElementById('twitter-wjs')) {
-                const script = document.createElement('script');
-                script.id = 'twitter-wjs';
-                script.src = 'https://platform.twitter.com/widgets.js';
-                script.async = true;
-                script.charset = 'utf-8';
-                
-                script.onload = function() {
-                    console.log('Twitter widgets script loaded');
-                    if (loadingEl) loadingEl.style.display = 'none';
-                    
-                    // Create the timeline link
-                    const timelineLink = document.createElement('a');
-                    timelineLink.className = 'twitter-timeline';
-                    timelineLink.setAttribute('data-theme', 'light');
-                    timelineLink.setAttribute('data-tweet-limit', '5');
-                    timelineLink.setAttribute('data-chrome', 'noheader nofooter noscrollbar');
-                    timelineLink.setAttribute('data-width', '360');
-                    timelineLink.setAttribute('data-height', '500');
-                    timelineLink.href = 'https://twitter.com/teslashortstime?ref_src=twsrc%5Etfw';
-                    timelineLink.textContent = 'Tweets by teslashortstime';
-                    
-                    iframeContainer.appendChild(timelineLink);
-                    
-                    // Initialize widgets
-                    if (window.twttr && window.twttr.widgets) {
-                        window.twttr.widgets.load(iframeContainer);
-                    } else {
-                        // Wait for twttr to be ready
-                        window.twttr = window.twttr || {};
-                        window.twttr._e = window.twttr._e || [];
-                        window.twttr.ready = window.twttr.ready || function(f) {
-                            window.twttr._e.push(f);
-                        };
-                        window.twttr.ready(function() {
-                            if (window.twttr && window.twttr.widgets) {
-                                window.twttr.widgets.load(iframeContainer);
-                            }
-                        });
-                    }
-                };
-                
-                script.onerror = function() {
-                    console.error('Failed to load Twitter widgets script');
-                    if (loadingEl) loadingEl.style.display = 'none';
-                    if (errorEl) {
-                        errorEl.style.display = 'block';
-                        errorEl.textContent = 'Failed to load Twitter posts. Please refresh the page.';
-                    }
-                };
-                
-                document.head.appendChild(script);
-            } else {
-                // Script already loaded, just create the timeline
-                if (loadingEl) loadingEl.style.display = 'none';
-                const timelineLink = document.createElement('a');
-                timelineLink.className = 'twitter-timeline';
-                timelineLink.setAttribute('data-theme', 'light');
-                timelineLink.setAttribute('data-tweet-limit', '5');
-                timelineLink.setAttribute('data-chrome', 'noheader nofooter noscrollbar');
-                timelineLink.setAttribute('data-width', '360');
-                timelineLink.setAttribute('data-height', '500');
-                timelineLink.href = 'https://twitter.com/teslashortstime?ref_src=twsrc%5Etfw';
-                timelineLink.textContent = 'Tweets by teslashortstime';
-                
-                iframeContainer.appendChild(timelineLink);
-                
-                if (window.twttr && window.twttr.widgets) {
-                    window.twttr.widgets.load(iframeContainer);
-                }
-            }
-        }
-        
-        // Load Twitter posts on page load
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function() {
-                setTimeout(loadTwitterPosts, 500);
-            });
-        } else {
-            setTimeout(loadTwitterPosts, 500);
-        }
     </script>
 </body>
 </html>
