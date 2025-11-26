@@ -458,9 +458,9 @@ You are an elite Tesla news curator producing the daily "Tesla Shorts Time" news
 ### SELECTION RULES (ZERO EXCEPTIONS - MANDATORY COUNTS)
 **YOU MUST INCLUDE EXACTLY THESE COUNTS - NO EXCEPTIONS:**
 - **EXACTLY 5 unique news articles** from the pre-fetched list (prioritize highest quality sources)
-- **EXACTLY 10 unique X posts** from the pre-fetched list (prioritize highest engagement scores)
-- **CRITICAL: If you have fewer than 10 X posts in the pre-fetched list, you MUST use ALL available pre-fetched X posts and output exactly that many (even if less than 10). DO NOT make up or hallucinate X post URLs.**
-- **CRITICAL: The output MUST contain exactly the number of X posts available in the pre-fetched list (up to 10). If you have 8 pre-fetched posts, output exactly 8. If you have 10+, output exactly 10.**
+- **X POSTS: Use ALL available pre-fetched X posts (up to 10 maximum). If you have 0 pre-fetched X posts, output 0 X posts. If you have 3, output 3. If you have 10+, output exactly 10.**
+- **CRITICAL: DO NOT make up or hallucinate X post URLs. Only use the exact URLs from the pre-fetched X posts list.**
+- **CRITICAL: If there are 0 pre-fetched X posts available, you MUST output 0 X posts in the "Top 10 X Posts" section (or skip that section entirely if 0 posts). DO NOT invent posts or URLs.**
 - **NEVER invent URLs or links - only use the exact URLs provided in the pre-fetched data**
 
 **DIVERSITY RULES (apply after meeting the count requirements):**
@@ -583,7 +583,7 @@ Before outputting, verify:
 - NEVER modify URLs, shorten them, or create new ones
 - If you have fewer than 10 pre-fetched X posts, output exactly that many (numbered 1, 2, 3, etc.) - DO NOT make up additional posts or URLs
 
-Now produce today's edition following every rule above exactly. Remember: EXACTLY 10 X POSTS IS MANDATORY.
+Now produce today's edition following every rule above exactly. Remember: Use ONLY pre-fetched X posts (up to 10 maximum). If 0 posts are available, output 0 posts. DO NOT invent or hallucinate any URLs.
 """
 
 logging.info("Generating X thread with Grok using pre-fetched content (this may take 1-2 minutes)...")
