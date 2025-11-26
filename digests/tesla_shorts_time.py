@@ -504,7 +504,7 @@ if top_x_posts:
         x_posts_section += f"\n**WARNING: Only {len(top_x_posts)} X posts were fetched. You MUST use web search to find additional X posts to reach exactly 10 total posts in your output.**\n\n"
 else:
     x_posts_section = "## PRE-FETCHED X POSTS: None available\n\n"
-    x_posts_section += "**CRITICAL: No X posts were pre-fetched. You MUST use web search and X search tools to find exactly 10 X posts from the last 24 hours for your output.**\n\n"
+    x_posts_section += "**CRITICAL: No X posts were pre-fetched from X API (authentication may have failed). You MUST use web search and X search tools to find exactly 10 X posts from the last 24 hours for your output. Search for recent Tesla-related posts on X (Twitter) and include the exact X post URLs (format: https://x.com/username/status/ID).**\n\n"
 
 X_PROMPT = f"""
 # Tesla Shorts Time - DAILY EDITION
@@ -529,9 +529,9 @@ You are an elite Tesla news curator producing the daily "Tesla Shorts Time" news
 ### SELECTION RULES (ZERO EXCEPTIONS - MANDATORY COUNTS)
 **YOU MUST INCLUDE EXACTLY THESE COUNTS - NO EXCEPTIONS:**
 - **EXACTLY 5 unique news articles** from the pre-fetched list (prioritize highest quality sources)
-- **X POSTS: Use ALL available pre-fetched X posts (up to 10 maximum). If you have 0 pre-fetched X posts, output 0 X posts. If you have 3, output 3. If you have 10+, output exactly 10.**
-- **CRITICAL: DO NOT make up or hallucinate X post URLs. Only use the exact URLs from the pre-fetched X posts list.**
-- **CRITICAL: If there are 0 pre-fetched X posts available, you MUST output 0 X posts in the "Top 10 X Posts" section (or skip that section entirely if 0 posts). DO NOT invent posts or URLs.**
+- **X POSTS: If you have pre-fetched X posts available, use ALL of them (up to 10 maximum). If you have 0 pre-fetched X posts, you MUST use web search to find exactly 10 X posts from the last 24 hours.**
+- **CRITICAL: When using web search for X posts, you MUST find real X post URLs (format: https://x.com/username/status/ID) from the last 24 hours. DO NOT make up or hallucinate URLs.**
+- **CRITICAL: If there are 0 pre-fetched X posts, you MUST still output exactly 10 X posts by using web search to find real X posts from the last 24 hours.**
 - **NEVER invent URLs or links - only use the exact URLs provided in the pre-fetched data**
 
 **DIVERSITY RULES (apply after meeting the count requirements):**
@@ -649,24 +649,33 @@ Before outputting, verify:
 
 **CRITICAL URL RULES:**
 - For each news item, you MUST use the exact URL from the pre-fetched article list above
-- For each X post, you MUST use the exact URL from the pre-fetched X posts list above (format: https://x.com/username/status/ID)
-- If you cannot match an output item to a pre-fetched URL, DO NOT include that item - choose a different pre-fetched item instead
+- For X posts: If pre-fetched X posts are available, use those exact URLs. If NO pre-fetched X posts are available (0 posts), you MUST use web search to find real X post URLs (format: https://x.com/username/status/ID) from the last 24 hours
 - NEVER modify URLs, shorten them, or create new ones
-- If you have fewer than 10 pre-fetched X posts, output exactly that many (numbered 1, 2, 3, etc.) - DO NOT make up additional posts or URLs
+- All URLs must be real and accessible - verify them through web search if needed
+- If you have fewer than 10 pre-fetched X posts but more than 0, output exactly that many (numbered 1, 2, 3, etc.). If you have 0 pre-fetched posts, you MUST find 10 via web search.
 
-Now produce today's edition following every rule above exactly. Remember: Use ONLY pre-fetched X posts (up to 10 maximum). If 0 posts are available, output 0 posts. DO NOT invent or hallucinate any URLs.
+Now produce today's edition following every rule above exactly. Remember: If you have pre-fetched X posts, use them. If you have 0 pre-fetched X posts, you MUST use web search to find exactly 10 real X posts from the last 24 hours. DO NOT invent or hallucinate any URLs - all URLs must be real and accessible.
 """
 
 logging.info("Generating X thread with Grok using pre-fetched content (this may take 1-2 minutes)...")
+
+# Enable web search if we have no pre-fetched X posts (X API failed)
+# Otherwise, disable it to use only pre-fetched URLs and avoid hallucinations
+enable_web_search = len(top_x_posts) == 0
+if enable_web_search:
+    logging.warning("⚠️  No X posts were pre-fetched - enabling Grok web search to find X posts")
+    search_params = {"mode": "on", "max_search_results": 10, "from_date": yesterday_iso}
+else:
+    logging.info("✅ Using only pre-fetched X posts - web search disabled to avoid hallucinations")
+    search_params = {"mode": "off"}
+
 try:
     response = client.chat.completions.create(
         model="grok-4-1-fast-reasoning",
         messages=[{"role": "user", "content": X_PROMPT}],
         temperature=0.7,
         max_tokens=4000,
-        # Disable web search - we want to use ONLY pre-fetched URLs to avoid hallucinations and dead links
-        # All content must come from the pre-fetched news articles and X posts
-        extra_body={"search_parameters": {"mode": "off"}}
+        extra_body={"search_parameters": search_params}
     )
     x_thread = response.choices[0].message.content.strip()
 except Exception as e:
