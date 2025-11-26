@@ -3,436 +3,363 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tesla Shorts Time Daily - Podcast Player</title>
+    <meta name="description" content="Daily podcast digesting Tesla news, shorts meltdowns, and EV future—hosted by Patrick in Vancouver. Your fix of TSLA drama.">
+    <meta name="keywords" content="Tesla podcast, TSLA shorts, Tesla news, EV podcast, Tesla stock, TSLA analysis, Patrick Vancouver, Tesla Shorts Time">
+    <title>Tesla Shorts Time Daily | Your Fix of TSLA Drama</title>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;600;700&family=Inter:wght@400;500;600&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+    
     <style>
+        :root {
+            --tesla-red: #E31937;
+            --tesla-red-dark: #C4122E;
+            --tesla-silver: #CCD6F6;
+            --tesla-dark: #000000;
+            --tesla-gray: #333333;
+            --tesla-gray-light: #666666;
+            --tesla-bg: #0a0a0a;
+            --tesla-card: #1a1a1a;
+            --tesla-text: #ffffff;
+            --tesla-text-light: #cccccc;
+        }
+        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
         
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
+        html {
+            scroll-behavior: smooth;
         }
         
-        .main-wrapper {
+        body {
+            font-family: 'Inter', 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--tesla-dark);
+            color: var(--tesla-text);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        
+        /* Header/Navigation */
+        header {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            padding: 1rem 2rem;
+            border-bottom: 2px solid var(--tesla-red);
+        }
+        
+        nav {
             max-width: 1400px;
             margin: 0 auto;
             display: flex;
-            gap: 20px;
-            align-items: flex-start;
+            justify-content: space-between;
+            align-items: center;
         }
         
-        .container {
-            flex: 1;
-            max-width: 900px;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
+        .logo {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 900;
+            color: var(--tesla-red);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
         
-        .sidebar {
-            flex: 0 0 400px;
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+        
+        .nav-links a {
+            color: var(--tesla-text);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+        
+        .nav-links a:hover {
+            color: var(--tesla-red);
+        }
+        
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
-            gap: 20px;
-        }
-        
-        .stock-price-widget {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
-        }
-        
-        .stock-header {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: white;
-            padding: 20px;
-            text-align: center;
-        }
-        
-        .stock-header h2 {
-            font-size: 1.5em;
-            margin: 0 0 10px 0;
-        }
-        
-        .stock-content {
-            padding: 25px;
-        }
-        
-        .stock-price {
-            font-size: 2.5em;
-            font-weight: 700;
-            color: #1a1a2e;
-            margin-bottom: 10px;
-        }
-        
-        .stock-change {
-            font-size: 1.2em;
-            font-weight: 600;
-            margin-bottom: 15px;
-        }
-        
-        .stock-change.positive {
-            color: #10b981;
-        }
-        
-        .stock-change.negative {
-            color: #ef4444;
-        }
-        
-        .stock-info {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid #e0e0e0;
-        }
-        
-        .stock-info-item {
-            text-align: center;
-        }
-        
-        .stock-info-label {
-            font-size: 0.85em;
-            color: #666;
-            margin-bottom: 5px;
-        }
-        
-        .stock-info-value {
-            font-size: 1.1em;
-            font-weight: 600;
-            color: #1a1a2e;
-        }
-        
-        .stock-loading {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-        }
-        
-        .twitter-sidebar {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
-            max-height: 600px;
-        }
-        
-        .twitter-header {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: white;
-            padding: 20px;
-            text-align: center;
-        }
-        
-        .twitter-header h2 {
-            font-size: 1.5em;
-            margin: 0;
-        }
-        
-        .twitter-posts-container {
-            padding: 20px;
-            max-height: calc(600px - 80px);
-            overflow-y: auto;
-            min-height: 400px;
-        }
-        
-        .twitter-post {
-            border: 1px solid #e0e0e0;
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 15px;
-            background: #f9f9f9;
-        }
-        
-        .twitter-post-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        
-        .twitter-post-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            margin-right: 10px;
-            background: #1da1f2;
-            display: flex;
-            align-items: center;
             justify-content: center;
-            color: white;
-            font-weight: bold;
-        }
-        
-        .twitter-post-author {
-            font-weight: 600;
-            color: #1a1a2e;
-        }
-        
-        .twitter-post-date {
-            font-size: 0.85em;
-            color: #666;
-            margin-left: auto;
-        }
-        
-        .twitter-post-text {
-            color: #333;
-            line-height: 1.5;
-            margin-bottom: 10px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-        
-        .twitter-post-link {
-            color: #1da1f2;
-            text-decoration: none;
-            font-size: 0.9em;
-        }
-        
-        .twitter-post-link:hover {
-            text-decoration: underline;
-        }
-        
-        .twitter-iframe-container {
-            width: 100%;
-            height: 500px;
+            align-items: center;
+            text-align: center;
+            padding: 8rem 2rem 4rem;
+            background: linear-gradient(135deg, var(--tesla-dark) 0%, #1a1a2e 100%);
+            position: relative;
             overflow: hidden;
         }
         
-        .twitter-iframe-container iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600"><path d="M0,300 Q300,100 600,300 T1200,300" stroke="%23E31937" stroke-width="2" fill="none" opacity="0.1"/></svg>') no-repeat center;
+            background-size: cover;
+            animation: pulse 3s ease-in-out infinite;
         }
         
-        .twitter-link-container {
-            padding: 25px;
-            text-align: center;
+        @keyframes pulse {
+            0%, 100% { opacity: 0.1; }
+            50% { opacity: 0.2; }
         }
         
-        .twitter-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            padding: 15px 25px;
-            background: linear-gradient(135deg, #1da1f2 0%, #0d8bd9 100%);
-            color: white;
-            text-decoration: none;
-            border-radius: 12px;
+        .hero-content {
+            position: relative;
+            z-index: 1;
+            max-width: 800px;
+        }
+        
+        .hero h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            font-weight: 900;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, var(--tesla-red) 0%, var(--tesla-silver) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .hero .tagline {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: clamp(1.2rem, 2.5vw, 1.8rem);
             font-weight: 600;
-            font-size: 1.1em;
-            transition: transform 0.2s, box-shadow 0.2s;
-            box-shadow: 0 4px 15px rgba(29, 161, 242, 0.3);
+            color: var(--tesla-silver);
+            margin-bottom: 2rem;
         }
         
-        .twitter-link:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(29, 161, 242, 0.4);
+        .hero .subtitle {
+            font-size: 1.1rem;
+            color: var(--tesla-text-light);
+            margin-bottom: 3rem;
         }
         
-        .twitter-link-icon {
-            font-size: 1.3em;
-        }
-        
-        .referral-sidebar {
-            background: white;
+        .hero-image {
+            width: 300px;
+            height: 300px;
             border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
-            margin-top: 20px;
+            margin: 2rem auto;
+            box-shadow: 0 20px 60px rgba(227, 25, 55, 0.3);
+            border: 3px solid var(--tesla-red);
         }
         
-        .referral-header {
-            background: linear-gradient(135deg, #e31937 0%, #c4122e 100%);
-            color: white;
-            padding: 20px;
-            text-align: center;
+        .cta-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 2rem;
         }
         
-        .referral-header h2 {
-            font-size: 1.5em;
-            margin: 0;
-        }
-        
-        .referral-content {
-            padding: 25px;
-            text-align: center;
-        }
-        
-        .referral-description {
-            color: #333;
-            margin-bottom: 20px;
-            font-size: 1em;
-            line-height: 1.5;
-        }
-        
-        .referral-link {
+        .btn {
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.3s;
             display: inline-flex;
             align-items: center;
-            gap: 10px;
-            padding: 15px 25px;
-            background: linear-gradient(135deg, #e31937 0%, #c4122e 100%);
-            color: white;
-            text-decoration: none;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 1.1em;
-            transition: transform 0.2s, box-shadow 0.2s;
-            box-shadow: 0 4px 15px rgba(227, 25, 55, 0.3);
+            gap: 0.5rem;
         }
         
-        .referral-link:hover {
+        .btn-primary {
+            background: var(--tesla-red);
+            color: white;
+            box-shadow: 0 4px 15px rgba(227, 25, 55, 0.4);
+        }
+        
+        .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(227, 25, 55, 0.4);
+            box-shadow: 0 6px 20px rgba(227, 25, 55, 0.6);
         }
         
-        .referral-link-icon {
-            font-size: 1.3em;
+        .btn-secondary {
+            background: transparent;
+            color: var(--tesla-text);
+            border: 2px solid var(--tesla-red);
         }
         
-        @media (max-width: 1024px) {
-            .main-wrapper {
-                flex-direction: column;
-            }
-            
-            .sidebar {
-                flex: 1;
-                width: 100%;
-                max-width: 900px;
-            }
-            
-            .stock-info {
-                grid-template-columns: 1fr 1fr;
-            }
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        .btn-secondary:hover {
+            background: var(--tesla-red);
             color: white;
-            padding: 40px;
-            text-align: center;
         }
         
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
+        /* Episodes Section */
+        .episodes-section {
+            padding: 4rem 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .section-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        
+        .section-header h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(2rem, 4vw, 3rem);
             font-weight: 700;
+            color: var(--tesla-red);
+            margin-bottom: 1rem;
         }
         
-        .header p {
-            font-size: 1.1em;
-            opacity: 0.9;
+        .section-header p {
+            color: var(--tesla-text-light);
+            font-size: 1.1rem;
         }
         
-        .header img {
-            width: 200px;
-            height: 200px;
-            border-radius: 20px;
-            margin: 20px auto;
-            display: block;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        .search-bar {
+            max-width: 600px;
+            margin: 2rem auto;
+            position: relative;
         }
         
-        .content {
-            padding: 40px;
+        .search-bar input {
+            width: 100%;
+            padding: 1rem 1rem 1rem 3rem;
+            background: var(--tesla-card);
+            border: 2px solid var(--tesla-gray);
+            border-radius: 8px;
+            color: var(--tesla-text);
+            font-size: 1rem;
+            transition: border-color 0.3s;
         }
         
-        .episode {
-            border: 2px solid #e0e0e0;
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 20px;
-            transition: all 0.3s ease;
-            background: #fafafa;
+        .search-bar input:focus {
+            outline: none;
+            border-color: var(--tesla-red);
         }
         
-        .episode:hover {
-            border-color: #667eea;
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
-            transform: translateY(-2px);
+        .search-bar::before {
+            content: '🔍';
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
         }
         
-        .episode.active {
-            border-color: #667eea;
-            background: #f0f4ff;
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.3);
+        .episodes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        
+        .episode-card {
+            background: var(--tesla-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 2px solid var(--tesla-gray);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .episode-card:hover {
+            border-color: var(--tesla-red);
+            transform: translateY(-4px);
+            box-shadow: 0 10px 30px rgba(227, 25, 55, 0.2);
+        }
+        
+        .episode-card.active {
+            border-color: var(--tesla-red);
+            background: rgba(227, 25, 55, 0.1);
         }
         
         .episode-title {
-            font-size: 1.4em;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.3rem;
             font-weight: 600;
-            color: #1a1a2e;
-            margin-bottom: 10px;
+            color: var(--tesla-text);
+            margin-bottom: 0.5rem;
         }
         
-        .episode-date {
-            color: #666;
-            font-size: 0.9em;
-            margin-bottom: 15px;
+        .episode-meta {
+            display: flex;
+            gap: 1rem;
+            color: var(--tesla-text-light);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
         }
         
         .episode-description {
-            color: #555;
+            color: var(--tesla-text-light);
+            font-size: 0.95rem;
             line-height: 1.6;
-            margin-bottom: 20px;
+            margin-bottom: 1rem;
         }
         
         .player-controls {
             display: flex;
             align-items: center;
-            gap: 15px;
-            margin-top: 15px;
+            gap: 1rem;
+            margin-top: 1rem;
         }
         
         .play-button {
-            width: 60px;
-            height: 60px;
+            width: 50px;
+            height: 50px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--tesla-red);
             border: none;
             color: white;
-            font-size: 24px;
+            font-size: 1.2rem;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s;
+            flex-shrink: 0;
         }
         
         .play-button:hover {
             transform: scale(1.1);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+            box-shadow: 0 4px 15px rgba(227, 25, 55, 0.5);
         }
         
         .play-button.playing {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            background: var(--tesla-red-dark);
         }
         
         .progress-container {
             flex: 1;
-            position: relative;
         }
         
         .progress-bar {
             width: 100%;
-            height: 8px;
-            background: #e0e0e0;
-            border-radius: 4px;
+            height: 6px;
+            background: var(--tesla-gray);
+            border-radius: 3px;
             overflow: hidden;
             cursor: pointer;
+            margin-bottom: 0.5rem;
         }
         
         .progress-fill {
             height: 100%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--tesla-red);
             width: 0%;
             transition: width 0.1s linear;
         }
@@ -440,119 +367,329 @@
         .time-display {
             display: flex;
             justify-content: space-between;
-            font-size: 0.85em;
-            color: #666;
-            margin-top: 5px;
+            font-size: 0.85rem;
+            color: var(--tesla-text-light);
         }
         
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #666;
+        /* Stock Widget */
+        .stock-widget {
+            background: var(--tesla-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 2px solid var(--tesla-gray);
+            margin: 2rem 0;
         }
         
-        .error {
-            text-align: center;
-            padding: 40px;
-            color: #f5576c;
+        .stock-widget h3 {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.3rem;
+            color: var(--tesla-red);
+            margin-bottom: 1rem;
         }
         
-        .rss-link {
-            text-align: center;
-            padding: 20px;
-            background: #f5f5f5;
-            border-top: 1px solid #e0e0e0;
+        .stock-price {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--tesla-text);
+            margin-bottom: 0.5rem;
         }
         
-        .rss-link a {
-            color: #667eea;
-            text-decoration: none;
+        .stock-change {
+            font-size: 1.2rem;
             font-weight: 600;
         }
         
-        .rss-link a:hover {
-            text-decoration: underline;
+        .stock-change.positive {
+            color: #10b981;
+        }
+        
+        .stock-change.negative {
+            color: var(--tesla-red);
+        }
+        
+        .stock-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--tesla-gray);
+        }
+        
+        .stock-info-item {
+            text-align: center;
+        }
+        
+        .stock-info-label {
+            font-size: 0.85rem;
+            color: var(--tesla-text-light);
+            margin-bottom: 0.25rem;
+        }
+        
+        .stock-info-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--tesla-text);
+        }
+        
+        /* About Section */
+        .about-section {
+            padding: 4rem 2rem;
+            background: var(--tesla-card);
+            margin-top: 4rem;
+        }
+        
+        .about-content {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 3rem;
+            align-items: center;
+        }
+        
+        .about-image {
+            width: 100%;
+            max-width: 300px;
+            border-radius: 12px;
+            border: 3px solid var(--tesla-red);
+        }
+        
+        .about-text h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            color: var(--tesla-red);
+            margin-bottom: 1rem;
+        }
+        
+        .about-text p {
+            color: var(--tesla-text-light);
+            margin-bottom: 1rem;
+            line-height: 1.8;
+        }
+        
+        .social-links {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        
+        .social-link {
+            padding: 0.75rem 1.5rem;
+            background: var(--tesla-red);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .social-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(227, 25, 55, 0.4);
+        }
+        
+        /* Footer */
+        footer {
+            background: var(--tesla-dark);
+            padding: 3rem 2rem;
+            text-align: center;
+            border-top: 2px solid var(--tesla-red);
+        }
+        
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+            margin-bottom: 2rem;
+        }
+        
+        .footer-links a {
+            color: var(--tesla-text);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        
+        .footer-links a:hover {
+            color: var(--tesla-red);
+        }
+        
+        .footer-text {
+            color: var(--tesla-text-light);
+            font-size: 0.9rem;
+        }
+        
+        /* Loading & Error States */
+        .loading, .error {
+            text-align: center;
+            padding: 3rem;
+            color: var(--tesla-text-light);
+        }
+        
+        .error {
+            color: var(--tesla-red);
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+            
+            .hero {
+                padding: 6rem 1rem 2rem;
+            }
+            
+            .episodes-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .about-content {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+            
+            .cta-buttons {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+        
+        /* Accessibility */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+        
+        /* Focus styles for keyboard navigation */
+        a:focus, button:focus, input:focus {
+            outline: 2px solid var(--tesla-red);
+            outline-offset: 2px;
         }
     </style>
 </head>
 <body>
-    <div class="main-wrapper">
-        <div class="container">
-        <div class="header">
-            <h1>🚗⚡ Tesla Shorts Time Daily</h1>
-            <p>Daily Tesla News Digest & Podcast</p>
-            <p style="margin-top: 10px; font-size: 0.9em;">Hosted by Patrick in Vancouver</p>
-            <img id="podcast-image" src="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast-image.jpg" alt="Podcast Cover" onerror="this.style.display='none'">
+    <!-- Header -->
+    <header>
+        <nav>
+            <a href="#home" class="logo">
+                ⚡ TS
+            </a>
+            <ul class="nav-links">
+                <li><a href="#episodes">Episodes</a></li>
+                <li><a href="#about">About</a></li>
+                <li><a href="#subscribe">Subscribe</a></li>
+            </ul>
+        </nav>
+    </header>
+    
+    <!-- Hero Section -->
+    <section id="home" class="hero">
+        <div class="hero-content">
+            <h1>Tesla Shorts Time Daily</h1>
+            <p class="tagline">Shorting Tesla? Time's Up.</p>
+            <p class="subtitle">Daily podcast digesting Tesla news, shorts meltdowns, and EV future—hosted by Patrick in Vancouver</p>
+            <img id="podcast-image" class="hero-image" src="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast-image.jpg" alt="Tesla Shorts Time Podcast Cover" onerror="this.style.display='none'">
+            <div class="cta-buttons">
+                <a href="#episodes" class="btn btn-primary">🎧 Listen Now</a>
+                <a href="https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939" target="_blank" class="btn btn-secondary">🍎 Apple Podcasts</a>
+                <a href="https://x.com/teslashortstime" target="_blank" class="btn btn-secondary">🐦 Follow on X</a>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Episodes Section -->
+    <section id="episodes" class="episodes-section">
+        <div class="section-header">
+            <h2>Latest Episodes</h2>
+            <p>Your daily fix of TSLA drama and Tesla insights</p>
         </div>
         
-        <div class="content">
-            <div id="loading" class="loading">Loading episodes...</div>
-            <div id="error" class="error" style="display: none;"></div>
-            <div id="episodes"></div>
-        </div>
-        
-        <div class="rss-link">
-            <a href="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast.rss" target="_blank">📡 RSS Feed</a> | 
-            <a href="https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939" target="_blank">🍎 Apple Podcasts</a> |
-            <a href="https://github.com/patricknovak/Tesla-shorts-time" target="_blank">💻 GitHub</a>
-        </div>
-        </div>
-        
-        <div class="sidebar">
-            <div class="stock-price-widget">
-                <div class="stock-header">
-                    <h2>💰 Live TSLA Stock Price</h2>
-                </div>
-                <div class="stock-content">
-                    <div id="stock-loading" class="stock-loading">Loading stock data...</div>
-                    <div id="stock-data" style="display: none;">
-                        <div class="stock-price" id="stock-price">$0.00</div>
-                        <div class="stock-change" id="stock-change">+$0.00 (0.00%)</div>
-                        <div class="stock-info">
-                            <div class="stock-info-item">
-                                <div class="stock-info-label">52W High</div>
-                                <div class="stock-info-value" id="high52">-</div>
-                            </div>
-                            <div class="stock-info-item">
-                                <div class="stock-info-label">52W Low</div>
-                                <div class="stock-info-value" id="low52">-</div>
-                            </div>
-                        </div>
+        <!-- Stock Widget -->
+        <div class="stock-widget">
+            <h3>💰 Live TSLA Stock Price</h3>
+            <div id="stock-loading" class="loading">Loading stock data...</div>
+            <div id="stock-data" style="display: none;">
+                <div class="stock-price" id="stock-price">$0.00</div>
+                <div class="stock-change" id="stock-change">+$0.00 (0.00%)</div>
+                <div class="stock-info">
+                    <div class="stock-info-item">
+                        <div class="stock-info-label">52W High</div>
+                        <div class="stock-info-value" id="high52">-</div>
+                    </div>
+                    <div class="stock-info-item">
+                        <div class="stock-info-label">52W Low</div>
+                        <div class="stock-info-value" id="low52">-</div>
                     </div>
                 </div>
             </div>
-            
-            <div class="twitter-sidebar">
-                <div class="twitter-header">
-                    <h2>🐦 Follow @teslashortstime</h2>
-                </div>
-                <div class="twitter-link-container">
-                    <a href="https://x.com/teslashortstime" target="_blank" rel="noopener noreferrer" class="twitter-link">
-                        <span class="twitter-link-icon">🐦</span>
-                        <span class="twitter-link-text">View @teslashortstime on X</span>
-                    </a>
-                </div>
+        </div>
+        
+        <!-- Search Bar -->
+        <div class="search-bar">
+            <input type="text" id="search-input" placeholder="Search episodes..." aria-label="Search episodes">
+        </div>
+        
+        <!-- Episodes Container -->
+        <div id="loading" class="loading">Loading episodes...</div>
+        <div id="error" class="error" style="display: none;"></div>
+        <div id="episodes" class="episodes-grid"></div>
+    </section>
+    
+    <!-- About Section -->
+    <section id="about" class="about-section">
+        <div class="about-content">
+            <div>
+                <img src="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast-image.jpg" alt="Patrick in Vancouver" class="about-image" onerror="this.style.display='none'">
             </div>
-            
-            <div class="referral-sidebar">
-                <div class="referral-header">
-                    <h2>🚗 Tesla Referral</h2>
-                </div>
-                <div class="referral-content">
-                    <p class="referral-description">Get 3 months free Full Self Driving or $650 off your Tesla purchase!</p>
-                    <a href="https://ts.la/patrick84289" target="_blank" rel="noopener noreferrer" class="referral-link">
-                        <span class="referral-link-icon">🔗</span>
-                        <span class="referral-link-text">Use Referral Link</span>
-                    </a>
+            <div class="about-text">
+                <h2>About Patrick</h2>
+                <p>Brewing Tesla insights from the Raincouver coast. Daily deep dives into TSLA news, short seller meltdowns, and the electric future.</p>
+                <p>Join me every day for the latest Tesla drama, stock analysis, and why the shorts keep getting squeezed.</p>
+                <div class="social-links">
+                    <a href="https://x.com/teslashortstime" target="_blank" class="social-link">🐦 X / Twitter</a>
+                    <a href="https://ts.la/patrick84289" target="_blank" class="social-link">🚗 Tesla Referral</a>
                 </div>
             </div>
         </div>
-    </div>
+    </section>
+    
+    <!-- Footer -->
+    <footer id="subscribe">
+        <div class="footer-content">
+            <div class="footer-links">
+                <a href="https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939" target="_blank">🍎 Apple Podcasts</a>
+                <a href="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast.rss" target="_blank">📡 RSS Feed</a>
+                <a href="https://x.com/teslashortstime" target="_blank">🐦 X / Twitter</a>
+                <a href="https://github.com/patricknovak/Tesla-shorts-time" target="_blank">💻 GitHub</a>
+            </div>
+            <p class="footer-text">Tesla Shorts Time Daily © 2025 | Hosted by Patrick in Vancouver</p>
+            <p class="footer-text">⚡ Keep accelerating! ⚡</p>
+        </div>
+    </footer>
     
     <script>
         const RSS_FEED_URL = 'https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast.rss';
         let currentAudio = null;
         let currentEpisode = null;
+        let allEpisodes = [];
         
         // Parse RSS feed
         async function loadPodcast() {
@@ -563,7 +700,6 @@
             try {
                 console.log('Loading RSS feed from:', RSS_FEED_URL);
                 
-                // Try direct fetch first, then fallback to CORS proxy
                 let response;
                 let xmlText;
                 
@@ -581,8 +717,6 @@
                     console.log('RSS feed loaded via CORS proxy');
                 }
                 
-                console.log('RSS feed loaded, length:', xmlText.length);
-                
                 if (!xmlText || xmlText.length < 100) {
                     throw new Error('RSS feed appears to be empty or invalid');
                 }
@@ -590,14 +724,12 @@
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
                 
-                // Check for parsing errors
                 const parserError = xmlDoc.querySelector('parsererror');
                 if (parserError) {
                     console.error('RSS parsing error:', parserError.textContent);
                     throw new Error('Failed to parse RSS feed XML');
                 }
                 
-                // Handle namespaces properly
                 const items = xmlDoc.getElementsByTagName('item');
                 console.log('Found items:', items.length);
                 
@@ -633,7 +765,6 @@
                             continue;
                         }
                         
-                        // Get duration from itunes namespace
                         let duration = '';
                         const durationEl = item.getElementsByTagNameNS(itunesNS, 'duration')[0];
                         if (durationEl) {
@@ -660,12 +791,13 @@
                     throw new Error('No valid episodes found in RSS feed');
                 }
                 
-                // Sort episodes by date (newest first)
                 episodes.sort((a, b) => {
                     const dateA = new Date(a.pubDateRaw || 0);
                     const dateB = new Date(b.pubDateRaw || 0);
                     return dateB - dateA;
                 });
+                
+                allEpisodes = episodes;
                 
                 if (loadingEl) loadingEl.style.display = 'none';
                 if (errorEl) errorEl.style.display = 'none';
@@ -715,37 +847,34 @@
                 return;
             }
             
-            console.log('Displaying episodes:', episodes.length);
-            
-            // Clear container first
             if (container) {
                 container.innerHTML = '';
                 
                 episodes.forEach((episode, index) => {
-                    const episodeDiv = document.createElement('div');
-                    episodeDiv.className = 'episode';
-                    episodeDiv.setAttribute('data-index', index);
+                    const episodeCard = document.createElement('div');
+                    episodeCard.className = 'episode-card';
+                    episodeCard.setAttribute('data-index', index);
                     
-                    // Escape HTML to prevent XSS
                     const title = escapeHtml(episode.title || 'Untitled Episode');
                     const description = escapeHtml(episode.description || '');
                     const pubDate = escapeHtml(episode.pubDate || '');
                     const duration = escapeHtml(episode.duration || '0:00');
                     const audioUrl = episode.audioUrl || '';
-                    
-                    // Escape audioUrl for use in HTML
                     const escapedAudioUrl = audioUrl.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
                     
-                    episodeDiv.innerHTML = `
+                    episodeCard.innerHTML = `
                         <div class="episode-title">${title}</div>
-                        <div class="episode-date">📅 ${pubDate} ${duration ? '• ⏱️ ' + duration : ''}</div>
+                        <div class="episode-meta">
+                            <span>📅 ${pubDate}</span>
+                            <span>⏱️ ${duration}</span>
+                        </div>
                         <div class="episode-description">${description}</div>
                         <div class="player-controls">
-                            <button class="play-button" data-index="${index}">
+                            <button class="play-button" data-index="${index}" aria-label="Play episode">
                                 ▶
                             </button>
                             <div class="progress-container">
-                                <div class="progress-bar" data-index="${index}">
+                                <div class="progress-bar" data-index="${index}" role="slider" aria-label="Progress" tabindex="0">
                                     <div class="progress-fill" id="progress-${index}"></div>
                                 </div>
                                 <div class="time-display">
@@ -757,12 +886,11 @@
                         <audio id="audio-${index}" src="${escapedAudioUrl}" preload="none"></audio>
                     `;
                     
-                    container.appendChild(episodeDiv);
+                    container.appendChild(episodeCard);
                     
-                    // Add event listeners
-                    const playButton = episodeDiv.querySelector('.play-button');
-                    const progressBar = episodeDiv.querySelector('.progress-bar');
-                    const audio = episodeDiv.querySelector('audio');
+                    const playButton = episodeCard.querySelector('.play-button');
+                    const progressBar = episodeCard.querySelector('.progress-bar');
+                    const audio = episodeCard.querySelector('audio');
                     
                     if (playButton && audio) {
                         playButton.addEventListener('click', () => {
@@ -774,9 +902,14 @@
                         progressBar.addEventListener('click', (e) => {
                             seek(e, index);
                         });
+                        progressBar.addEventListener('keydown', (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                seek(e, index);
+                            }
+                        });
                     }
                     
-                    // Update progress as audio plays
                     if (audio) {
                         audio.addEventListener('timeupdate', () => {
                             updateProgress(index, audio);
@@ -813,20 +946,13 @@
         
         function togglePlay(index, audioUrl, title) {
             const episode = document.querySelector(`[data-index="${index}"]`);
-            if (!episode) {
-                console.error('Episode not found for index:', index);
-                return;
-            }
+            if (!episode) return;
             
             const button = episode.querySelector('.play-button');
             const audio = document.getElementById(`audio-${index}`);
             
-            if (!audio) {
-                console.error('Audio element not found for index:', index);
-                return;
-            }
+            if (!audio) return;
             
-            // Stop current audio if playing different episode
             if (currentAudio && currentAudio !== audio) {
                 currentAudio.pause();
                 currentAudio.currentTime = 0;
@@ -851,15 +977,6 @@
                 episode.classList.add('active');
                 currentAudio = audio;
                 currentEpisode = episode;
-                
-                // Update progress as audio plays
-                audio.addEventListener('timeupdate', () => updateProgress(index, audio));
-                audio.addEventListener('loadedmetadata', () => {
-                    const total = document.getElementById(`total-${index}`);
-                    if (total) {
-                        total.textContent = formatTime(audio.duration);
-                    }
-                });
             } else {
                 audio.pause();
                 if (button) {
@@ -874,29 +991,44 @@
         
         function seek(event, index) {
             const audio = document.getElementById(`audio-${index}`);
-            const progressBar = event.currentTarget;
+            const progressBar = event.currentTarget || event.target.closest('.progress-bar');
+            if (!audio || !progressBar) return;
+            
             const rect = progressBar.getBoundingClientRect();
             const percent = (event.clientX - rect.left) / rect.width;
             audio.currentTime = percent * audio.duration;
         }
         
-        // Load podcast on page load (wait for DOM to be ready)
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function() {
-                loadPodcast();
+        // Search functionality
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                if (query === '') {
+                    displayEpisodes(allEpisodes);
+                } else {
+                    const filtered = allEpisodes.filter(episode => 
+                        episode.title.toLowerCase().includes(query) ||
+                        episode.description.toLowerCase().includes(query)
+                    );
+                    displayEpisodes(filtered);
+                }
             });
+        }
+        
+        // Load podcast on page load
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', loadPodcast);
         } else {
             loadPodcast();
         }
         
-        // Auto-refresh every 5 minutes to get new episodes
+        // Auto-refresh every 5 minutes
         setInterval(loadPodcast, 5 * 60 * 1000);
         
-        // ========================== TSLA STOCK PRICE ==========================
+        // Stock Price Loading
         async function loadStockPrice() {
             try {
-                // Use a CORS proxy or alternative API
-                // Try Alpha Vantage or Yahoo Finance with CORS proxy
                 const proxyUrl = 'https://api.allorigins.win/raw?url=';
                 const yahooUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/TSLA?interval=1d&range=1d';
                 
@@ -916,12 +1048,9 @@
                 const prevClose = meta.previousClose || meta.close;
                 const change = price - prevClose;
                 const changePercent = prevClose ? ((change / prevClose) * 100).toFixed(2) : '0.00';
-                const marketCap = meta.marketCap ? formatMarketCap(meta.marketCap) : 'N/A';
-                const volume = meta.regularMarketVolume ? formatVolume(meta.regularMarketVolume) : 'N/A';
                 const high52 = meta.fiftyTwoWeekHigh ? `$${meta.fiftyTwoWeekHigh.toFixed(2)}` : 'N/A';
                 const low52 = meta.fiftyTwoWeekLow ? `$${meta.fiftyTwoWeekLow.toFixed(2)}` : 'N/A';
                 
-                // Update UI
                 const loadingEl = document.getElementById('stock-loading');
                 const dataEl = document.getElementById('stock-data');
                 
@@ -945,43 +1074,25 @@
                     const low52El = document.getElementById('low52');
                     if (low52El) low52El.textContent = low52;
                 }
-                
             } catch (error) {
                 console.error('Error loading stock price:', error);
                 const loadingEl = document.getElementById('stock-loading');
                 if (loadingEl) {
                     loadingEl.textContent = 'Unable to load stock data. Please refresh.';
-                    loadingEl.style.color = '#f5576c';
+                    loadingEl.style.color = 'var(--tesla-red)';
                 }
             }
         }
         
-        function formatMarketCap(value) {
-            if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
-            if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
-            if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
-            return `$${value.toFixed(0)}`;
-        }
-        
-        function formatVolume(value) {
-            if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
-            if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
-            if (value >= 1e3) return `${(value / 1e3).toFixed(2)}K`;
-            return value.toLocaleString();
-        }
-        
-        // Load stock price on page load (wait for DOM to be ready)
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function() {
-                loadStockPrice();
-            });
+            document.addEventListener('DOMContentLoaded', loadStockPrice);
         } else {
             loadStockPrice();
         }
         
-        // Refresh stock price every 30 seconds
         setInterval(loadStockPrice, 30 * 1000);
     </script>
 </body>
 </html>
 
+</html>
