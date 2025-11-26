@@ -504,7 +504,7 @@ if top_x_posts:
         x_posts_section += f"\n**WARNING: Only {len(top_x_posts)} X posts were fetched. You MUST use web search to find additional X posts to reach exactly 10 total posts in your output.**\n\n"
 else:
     x_posts_section = "## PRE-FETCHED X POSTS: None available\n\n"
-    x_posts_section += "**CRITICAL: No X posts were pre-fetched from X API (authentication may have failed). You MUST use web search and X search tools to find exactly 10 X posts from the last 24 hours for your output. Search for recent Tesla-related posts on X (Twitter) and include the exact X post URLs (format: https://x.com/username/status/ID).**\n\n"
+    x_posts_section += "**CRITICAL: No X posts were pre-fetched from X API (authentication may have failed). You MUST use web search and X search tools to find exactly 10 REAL X posts from the last 24 hours for your output. Search for recent Tesla-related posts on X (Twitter) and include the EXACT X post URLs (format: https://x.com/username/status/ID). DO NOT invent, make up, or hallucinate any URLs - all URLs will be validated and invalid ones will be removed. Only include URLs you can verify through web search are real and accessible.**\n\n"
 
 X_PROMPT = f"""
 # Tesla Shorts Time - DAILY EDITION
@@ -656,7 +656,15 @@ Before outputting, verify:
 - All URLs must be real and accessible - verify them through web search if needed. Invalid URLs will be automatically removed from the output.
 - If you have fewer than 10 pre-fetched X posts but more than 0, output exactly that many (numbered 1, 2, 3, etc.). If you have 0 pre-fetched posts, you MUST find 10 via web search.
 
-Now produce today's edition following every rule above exactly. Remember: If you have pre-fetched X posts, use them. If you have 0 pre-fetched X posts, you MUST use web search to find exactly 10 real X posts from the last 24 hours. DO NOT invent or hallucinate any URLs - all URLs must be real and accessible.
+Now produce today's edition following every rule above exactly. Remember: If you have pre-fetched X posts, use them. If you have 0 pre-fetched X posts, you MUST use web search to find exactly 10 real X posts from the last 24 hours. 
+
+**CRITICAL ANTI-HALLUCINATION RULES:**
+- DO NOT invent, make up, or hallucinate any URLs
+- All X post URLs must be in the exact format: https://x.com/username/status/ID
+- You MUST verify each URL through web search before including it
+- Invalid URLs will be automatically removed from the output
+- If you cannot find 10 real X posts, output fewer rather than making up URLs
+- All URLs must be real, accessible, and from the last 24 hours
 """
 
 logging.info("Generating X thread with Grok using pre-fetched content (this may take 1-2 minutes)...")
