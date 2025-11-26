@@ -207,7 +207,7 @@ def fetch_tesla_news():
     to_date = datetime.datetime.now().strftime("%Y-%m-%d")
     
     params = {
-        "q": "Tesla OR TSLA OR Elon Musk",
+        "q": "Tesla OR TSLA OR Elon Musk OR $TSLA OR Robotaxi OR Optimus OR 4680 OR Supercharging OR AI5 OR Model 3 OR Model Y OR Model S OR Model X OR Cybertruck OR Roadster OR Semi OR Robotaxi OR Optimus OR Autopilot OR Full Self-Driving OR FSD OR Gigafactory OR Supercharger OR Powerwall OR Solar Roof",
         "from": from_date,
         "to": to_date,
         "sortBy": "publishedAt",
@@ -765,12 +765,12 @@ def generate_raw_data_html(raw_data, output_dir):
     
     # Add news articles
     for i, article in enumerate(raw_data["newsapi"]["articles"], 1):
-        title = html.escape(article.get("title", "No title"))
-        description = html.escape(article.get("description", "No description"))
-        url = html.escape(article.get("url", "#"))
+        title = html.escape(str(article.get("title") or "No title"))
+        description = html.escape(str(article.get("description") or "No description"))
+        url = html.escape(str(article.get("url") or "#"))
         source = html.escape(article.get("source", {}).get("name", "Unknown") if isinstance(article.get("source"), dict) else str(article.get("source", "Unknown")))
         published = article.get("publishedAt", "Unknown")
-        author = html.escape(article.get("author", "Unknown"))
+        author = html.escape(str(article.get("author") or "Unknown"))
         
         html_content += f"""            <div class="article">
                 <div class="article-title">{i}. {title}</div>
@@ -790,10 +790,10 @@ def generate_raw_data_html(raw_data, output_dir):
     
     # Add X posts
     for i, post in enumerate(raw_data["x_api"]["posts"], 1):
-        text = html.escape(post.get("text", "No text"))
-        username = html.escape(post.get("username", "unknown"))
-        name = html.escape(post.get("name", "Unknown"))
-        url = html.escape(post.get("url", "#"))
+        text = html.escape(str(post.get("text") or "No text"))
+        username = html.escape(str(post.get("username") or "unknown"))
+        name = html.escape(str(post.get("name") or "Unknown"))
+        url = html.escape(str(post.get("url") or "#"))
         created_at = post.get("created_at", "Unknown")
         engagement = post.get("engagement", 0)
         likes = post.get("likes", 0)
