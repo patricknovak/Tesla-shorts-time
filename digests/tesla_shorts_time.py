@@ -911,38 +911,38 @@ def format_digest_for_x(digest: str) -> str:
     
     # Add emoji to numbered list items for news (1️⃣, 2️⃣, etc.)
     emoji_numbers = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
-    for i in range(1, 6):
-        emoji_num = emoji_numbers[i-1]
-        # Match numbered items in news section (before X Posts section)
-        pattern = rf'^(\s*){i}\.\s+(?=.*📰|.*Top 5 News|.*Top 10 X Posts)'
-        replacement = rf'\1{emoji_num} '
-        formatted = re.sub(pattern, replacement, formatted, flags=re.MULTILINE)
-        # Also match if it's just a number followed by period at start of line in news context
-        pattern2 = rf'^(\s*){i}\.\s+(?=\*\*)'
-        # Only apply if we're in the news section (before X Posts)
-        if '📰' in formatted or 'Top 5 News' in formatted:
-            # Find the news section and apply emojis there
-            news_section_match = re.search(r'(📰.*?Top 5 News Items.*?)(🐦|Top 10 X Posts)', formatted, re.DOTALL)
-            if news_section_match:
-                news_section = news_section_match.group(1)
-                news_section_formatted = re.sub(rf'^(\s*){i}\.\s+', rf'\1{emoji_num} ', news_section, flags=re.MULTILINE)
-                formatted = formatted.replace(news_section_match.group(1), news_section_formatted)
+    
+    # Find the news section and apply emojis
+    if '📰' in formatted or 'Top 5 News' in formatted:
+        news_section_match = re.search(r'(📰.*?Top 5 News Items.*?)(🐦|Top 10 X Posts|━━)', formatted, re.DOTALL)
+        if news_section_match:
+            news_section = news_section_match.group(1)
+            for i in range(1, 6):
+                emoji_num = emoji_numbers[i-1]
+                # Replace numbered items in news section
+                news_section = re.sub(
+                    rf'^(\s*){i}\.\s+',
+                    lambda m: m.group(1) + emoji_num + ' ',
+                    news_section,
+                    flags=re.MULTILINE
+                )
+            formatted = formatted.replace(news_section_match.group(1), news_section)
     
     # Add emoji to numbered list items for X posts (1️⃣, 2️⃣, etc.)
-    for i in range(1, 11):
-        emoji_num = emoji_numbers[i-1] if i <= 10 else f'{i}'
-        # Match numbered items in X posts section
-        pattern = rf'^(\s*){i}\.\s+(?=.*🐦|.*Top 10 X Posts)'
-        replacement = rf'\1{emoji_num} '
-        formatted = re.sub(pattern, replacement, formatted, flags=re.MULTILINE)
-        # Also match if it's in the X posts section context
-        if '🐦' in formatted or 'Top 10 X Posts' in formatted:
-            # Find the X posts section and apply emojis there
-            x_section_match = re.search(r'(🐦.*?Top 10 X Posts.*?)(📉|Short Spot|━━)', formatted, re.DOTALL)
-            if x_section_match:
-                x_section = x_section_match.group(1)
-                x_section_formatted = re.sub(rf'^(\s*){i}\.\s+', rf'\1{emoji_num} ', x_section, flags=re.MULTILINE)
-                formatted = formatted.replace(x_section_match.group(1), x_section_formatted)
+    if '🐦' in formatted or 'Top 10 X Posts' in formatted:
+        x_section_match = re.search(r'(🐦.*?Top 10 X Posts.*?)(📉|Short Spot|━━)', formatted, re.DOTALL)
+        if x_section_match:
+            x_section = x_section_match.group(1)
+            for i in range(1, 11):
+                emoji_num = emoji_numbers[i-1] if i <= 10 else f'{i}.'
+                # Replace numbered items in X posts section
+                x_section = re.sub(
+                    rf'^(\s*){i}\.\s+',
+                    lambda m: m.group(1) + emoji_num + ' ',
+                    x_section,
+                    flags=re.MULTILINE
+                )
+            formatted = formatted.replace(x_section_match.group(1), x_section)
     
     # Clean up excessive newlines (more than 3 consecutive becomes 2)
     formatted = re.sub(r'\n{4,}', '\n\n', formatted)
