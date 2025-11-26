@@ -13,6 +13,7 @@ import subprocess
 import requests
 import tempfile
 import html
+import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from dotenv import load_dotenv
@@ -197,7 +198,8 @@ def remove_similar_items(items, similarity_threshold=0.7, get_text_func=None):
     return filtered
 
 def fetch_tesla_news():
-    """Fetch Tesla-related news from newsapi.org for the last 24 hours."""
+    """Fetch Tesla-related news from newsapi.org for the last 24 hours.
+    Returns tuple: (filtered_articles, raw_articles) for saving raw data."""
     newsapi_url = "https://newsapi.org/v2/everything"
     
     # Calculate date range (last 24 hours)
@@ -221,6 +223,9 @@ def fetch_tesla_news():
         
         articles = data.get("articles", [])
         logging.info(f"Fetched {len(articles)} articles from newsapi.org")
+        
+        # Store raw articles for saving
+        raw_articles = articles.copy()
         
         # Filter and format articles
         formatted_articles = []
@@ -255,20 +260,34 @@ def fetch_tesla_news():
             logging.info(f"Removed {before_dedup - after_dedup} similar/duplicate news articles")
         
         logging.info(f"Filtered to {len(formatted_articles)} unique Tesla news articles")
-        return formatted_articles[:20]  # Return top 20 for selection
+        filtered_result = formatted_articles[:20]  # Return top 20 for selection
+        return filtered_result, raw_articles
         
     except Exception as e:
         logging.error(f"Failed to fetch news from newsapi.org: {e}")
         logging.warning("Continuing without newsapi.org data - will rely on Grok search")
-        return []
+        return [], []
 
-tesla_news = fetch_tesla_news()
+tesla_news, raw_newsapi_articles = fetch_tesla_news()
 
 # ========================== STEP 2: FETCH TOP X POSTS FROM X API ==========================
 logging.info("Step 2: Fetching top X posts from the last 24 hours...")
 
 def fetch_top_x_posts():
-    """Fetch top X posts about Tesla from the last 24 hours, ranked by engagement."""
+    """
+    Fetch top X posts about Tesla from the last 24 hours, ranked by engagement.
+    Returns tuple: (filtered_posts, raw_posts) for saving raw data.
+    
+    OPTIMIZED FOR BASIC FREE PLAN:
+    - Uses 1 combined query instead of 3 separate queries (66% reduction in API calls)
+    - Requests 75 results total instead of 300 (75% reduction in tweet quota usage)
+    - Combined query covers all Tesla topics: Tesla, TSLA, Elon Musk, $TSLA, FSD, Cybertruck, Robotaxi
+    - Excludes retweets and replies to get higher quality original content
+    - Results are automatically sorted by relevance/engagement by X API
+    
+    This optimization reduces monthly API usage from ~90 requests/month (3 queries × 30 days) 
+    to ~30 requests/month (1 query × 30 days), staying well within basic plan limits.
+    """
     if not ENABLE_X_POSTING:
         logging.warning("X posting disabled - cannot fetch X posts. Will rely on Grok search.")
         return []
@@ -330,110 +349,133 @@ def fetch_top_x_posts():
             logging.error("  - X_BEARER_TOKEN (optional, but recommended for search)")
             return []
     
-    # Calculate date range (last 24 hours)
-    since_time = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)).isoformat()
+    # Calculate date range (last 24 hours) - use start_time to filter at API level for efficiency
+    start_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)
     
-    # Search for Tesla-related posts
-    search_queries = [
-        "Tesla OR TSLA OR Elon Musk -is:retweet lang:en",
-        "$TSLA -is:retweet lang:en",
-        "Tesla FSD OR Cybertruck OR Robotaxi -is:retweet lang:en"
-    ]
+    # OPTIMIZED: Single combined query instead of 3 separate queries to minimize API calls
+    # This reduces from 3 API requests to 1, saving 66% of your monthly request quota
+    # Combined query covers: Tesla, TSLA, Elon Musk, stock ticker, FSD, Cybertruck, Robotaxi
+    # Using engagement-focused operators to get higher quality results with fewer requests
+    optimized_query = "(Tesla OR TSLA OR \"Elon Musk\" OR $TSLA OR \"Tesla FSD\" OR Cybertruck OR Robotaxi) -is:retweet -is:reply lang:en"
     
     all_posts = []
+    raw_tweets = []  # Initialize raw tweets list
     
     try:
-        for query in search_queries:
-            try:
-                # Search for tweets
-                tweets = x_client.search_recent_tweets(
-                    query=query,
-                    max_results=100,  # Get up to 100 per query
-                    tweet_fields=["created_at", "public_metrics", "author_id", "text"],
-                    user_fields=["username", "name"],
-                    expansions=["author_id"]
-                )
-                
-                if tweets.data:
-                    # Get user data
-                    if tweets.includes and hasattr(tweets.includes, 'users'):
-                        users = {user.id: user for user in tweets.includes.users}
-                    elif tweets.includes and isinstance(tweets.includes, dict):
-                        users = {user.id: user for user in tweets.includes.get("users", [])}
-                    else:
-                        users = {}
-                    
-                    for tweet in tweets.data:
-                        # Calculate engagement score (weighted)
-                        # Tweepy v4+ uses public_metrics as an object with attributes
-                        metrics = tweet.public_metrics if hasattr(tweet, 'public_metrics') else {}
-                        if hasattr(metrics, 'like_count'):
-                            # It's a metrics object
-                            like_count = getattr(metrics, 'like_count', 0)
-                            retweet_count = getattr(metrics, 'retweet_count', 0)
-                            reply_count = getattr(metrics, 'reply_count', 0)
-                            quote_count = getattr(metrics, 'quote_count', 0)
-                        else:
-                            # It's a dict
-                            like_count = metrics.get("like_count", 0) if isinstance(metrics, dict) else 0
-                            retweet_count = metrics.get("retweet_count", 0) if isinstance(metrics, dict) else 0
-                            reply_count = metrics.get("reply_count", 0) if isinstance(metrics, dict) else 0
-                            quote_count = metrics.get("quote_count", 0) if isinstance(metrics, dict) else 0
-                        
-                        engagement = (
-                            like_count * 1 +
-                            retweet_count * 2 +
-                            reply_count * 1.5 +
-                            quote_count * 2
-                        )
-                        
-                        # Get username
-                        author = users.get(tweet.author_id)
-                        username = author.username if author else "unknown"
-                        name = author.name if author else "Unknown"
-                        
-                        # Check if post is within last 24 hours
-                        tweet_time = tweet.created_at
-                        if tweet_time and (datetime.datetime.now(datetime.timezone.utc) - tweet_time).total_seconds() <= 86400:
-                            all_posts.append({
-                                "id": tweet.id,
-                                "text": tweet.text,
-                                "username": username,
-                                "name": name,
-                                "url": f"https://x.com/{username}/status/{tweet.id}",
-                                "created_at": tweet_time.isoformat(),
-                                "engagement": engagement,
-                                "likes": like_count,
-                                "retweets": retweet_count,
-                                "replies": reply_count
-                            })
-            except tweepy.Unauthorized as e:
-                logging.error(f"❌ X API Authentication failed (401 Unauthorized) for query '{query}': {e}")
-                logging.error("This usually means:")
-                logging.error("  1. X API credentials in GitHub Secrets are incorrect or expired")
-                logging.error("  2. The Bearer Token or OAuth credentials don't have search permissions")
-                logging.error("  3. The X API app doesn't have the required access level")
-                logging.error("Please verify your X API credentials in GitHub Secrets:")
-                logging.error("  - X_CONSUMER_KEY")
-                logging.error("  - X_CONSUMER_SECRET")
-                logging.error("  - X_ACCESS_TOKEN")
-                logging.error("  - X_ACCESS_TOKEN_SECRET")
-                logging.error("  - X_BEARER_TOKEN (optional but recommended for search)")
-                # Don't continue with other queries if auth is failing
-                break
-            except tweepy.Forbidden as e:
-                logging.error(f"❌ X API Forbidden (403) for query '{query}': {e}")
-                logging.error("This usually means the API credentials don't have permission to search.")
-                break
-            except Exception as e:
-                error_msg = str(e)
-                if "401" in error_msg or "Unauthorized" in error_msg:
-                    logging.error(f"❌ X API Authentication failed (401) for query '{query}': {e}")
-                    logging.error("Please check your X API credentials in GitHub Secrets.")
-                    break
+        # Single optimized search query - reduces API calls from 3 to 1
+        try:
+            logging.info(f"Executing optimized single search query (reduces API usage by 66%)...")
+            # Request fewer results since we only need top 20, but get enough to filter for quality
+            # 75 results gives us good diversity after deduplication while staying well under limits
+            # Using start_time filters at API level, reducing unnecessary data transfer
+            tweets = x_client.search_recent_tweets(
+                query=optimized_query,
+                max_results=75,  # Reduced from 100 per query (was 300 total across 3 queries, now 75 total)
+                start_time=start_time,  # Filter to last 24 hours at API level for efficiency
+                tweet_fields=["created_at", "public_metrics", "author_id", "text"],
+                user_fields=["username", "name"],
+                expansions=["author_id"]
+                # Note: sort_order is not available for recent tweets on basic plan
+                # Results are automatically sorted by relevance/engagement by X API
+            )
+            
+            if tweets.data:
+                # Get user data
+                if tweets.includes and hasattr(tweets.includes, 'users'):
+                    users = {user.id: user for user in tweets.includes.users}
+                elif tweets.includes and isinstance(tweets.includes, dict):
+                    users = {user.id: user for user in tweets.includes.get("users", [])}
                 else:
-                    logging.warning(f"Error searching with query '{query}': {e}")
-                    continue
+                    users = {}
+                
+                logging.info(f"Processing {len(tweets.data)} tweets from optimized search...")
+                
+                for tweet in tweets.data:
+                    # Calculate engagement score (weighted)
+                    # Tweepy v4+ uses public_metrics as an object with attributes
+                    metrics = tweet.public_metrics if hasattr(tweet, 'public_metrics') else {}
+                    if hasattr(metrics, 'like_count'):
+                        # It's a metrics object
+                        like_count = getattr(metrics, 'like_count', 0)
+                        retweet_count = getattr(metrics, 'retweet_count', 0)
+                        reply_count = getattr(metrics, 'reply_count', 0)
+                        quote_count = getattr(metrics, 'quote_count', 0)
+                    else:
+                        # It's a dict
+                        like_count = metrics.get("like_count", 0) if isinstance(metrics, dict) else 0
+                        retweet_count = metrics.get("retweet_count", 0) if isinstance(metrics, dict) else 0
+                        reply_count = metrics.get("reply_count", 0) if isinstance(metrics, dict) else 0
+                        quote_count = metrics.get("quote_count", 0) if isinstance(metrics, dict) else 0
+                    
+                    engagement = (
+                        like_count * 1 +
+                        retweet_count * 2 +
+                        reply_count * 1.5 +
+                        quote_count * 2
+                    )
+                    
+                    # Get username
+                    author = users.get(tweet.author_id)
+                    username = author.username if author else "unknown"
+                    name = author.name if author else "Unknown"
+                    
+                    # Check if post is within last 24 hours
+                    tweet_time = tweet.created_at
+                    
+                    # Store raw tweet data (all tweets, not just within 24h)
+                    raw_tweet_data = {
+                        "id": str(tweet.id),
+                        "text": tweet.text,
+                        "username": username,
+                        "name": name,
+                        "url": f"https://x.com/{username}/status/{tweet.id}",
+                        "created_at": tweet_time.isoformat() if tweet_time else None,
+                        "engagement": engagement,
+                        "likes": like_count,
+                        "retweets": retweet_count,
+                        "replies": reply_count,
+                        "quotes": quote_count
+                    }
+                    raw_tweets.append(raw_tweet_data)
+                    
+                    if tweet_time and (datetime.datetime.now(datetime.timezone.utc) - tweet_time).total_seconds() <= 86400:
+                        all_posts.append({
+                            "id": tweet.id,
+                            "text": tweet.text,
+                            "username": username,
+                            "name": name,
+                            "url": f"https://x.com/{username}/status/{tweet.id}",
+                            "created_at": tweet_time.isoformat(),
+                            "engagement": engagement,
+                            "likes": like_count,
+                            "retweets": retweet_count,
+                            "replies": reply_count
+                        })
+            else:
+                logging.warning("No tweets returned from search query")
+                
+        except tweepy.Unauthorized as e:
+            logging.error(f"❌ X API Authentication failed (401 Unauthorized): {e}")
+            logging.error("This usually means:")
+            logging.error("  1. X API credentials in GitHub Secrets are incorrect or expired")
+            logging.error("  2. The Bearer Token or OAuth credentials don't have search permissions")
+            logging.error("  3. The X API app doesn't have the required access level")
+            logging.error("Please verify your X API credentials in GitHub Secrets:")
+            logging.error("  - X_CONSUMER_KEY")
+            logging.error("  - X_CONSUMER_SECRET")
+            logging.error("  - X_ACCESS_TOKEN")
+            logging.error("  - X_ACCESS_TOKEN_SECRET")
+            logging.error("  - X_BEARER_TOKEN (optional but recommended for search)")
+        except tweepy.Forbidden as e:
+            logging.error(f"❌ X API Forbidden (403): {e}")
+            logging.error("This usually means the API credentials don't have permission to search.")
+        except Exception as e:
+            error_msg = str(e)
+            if "401" in error_msg or "Unauthorized" in error_msg:
+                logging.error(f"❌ X API Authentication failed (401): {e}")
+                logging.error("Please check your X API credentials in GitHub Secrets.")
+            else:
+                logging.warning(f"Error searching X API: {e}")
         
         # Sort by engagement and get top posts
         all_posts.sort(key=lambda x: x["engagement"], reverse=True)
@@ -461,14 +503,332 @@ def fetch_top_x_posts():
         top_posts = unique_posts[:20]
         logging.info(f"Fetched {len(top_posts)} unique top X posts (ranked by engagement)")
         
-        return top_posts
+        return top_posts, raw_tweets
         
     except Exception as e:
         logging.error(f"Failed to fetch X posts: {e}")
         logging.warning("Continuing without X API data - will rely on Grok search")
-        return []
+        return [], []
 
-top_x_posts = fetch_top_x_posts()
+top_x_posts, raw_x_posts = fetch_top_x_posts()
+
+# ========================== SAVE RAW DATA AND GENERATE HTML PAGE ==========================
+logging.info("Saving raw data and generating HTML page for raw news and X posts...")
+
+def save_raw_data_and_generate_html(raw_news, raw_x_posts_data, output_dir):
+    """Save raw data to JSON and generate HTML page for GitHub Pages."""
+    today = datetime.date.today()
+    date_str = today.strftime("%Y-%m-%d")
+    
+    # Prepare raw data structure
+    raw_data = {
+        "date": date_str,
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "newsapi": {
+            "total_articles": len(raw_news),
+            "articles": raw_news
+        },
+        "x_api": {
+            "total_posts": len(raw_x_posts_data),
+            "posts": raw_x_posts_data
+        }
+    }
+    
+    # Save JSON file
+    json_path = output_dir / f"raw_data_{date_str}.json"
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(raw_data, f, indent=2, ensure_ascii=False)
+    logging.info(f"Raw data saved to {json_path}")
+    
+    # Generate HTML page
+    html_content = generate_raw_data_html(raw_data, output_dir)
+    
+    # Save date-specific HTML
+    html_path = output_dir / f"raw_data_{date_str}.html"
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
+    logging.info(f"HTML page generated at {html_path}")
+    
+    # Also update index.html to point to latest
+    index_path = output_dir / "raw_data_index.html"
+    with open(index_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
+    logging.info(f"Index HTML updated at {index_path}")
+    
+    return json_path, html_path
+
+def generate_raw_data_html(raw_data, output_dir):
+    """Generate HTML page displaying raw news and X posts."""
+    date_str = raw_data["date"]
+    formatted_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").strftime("%B %d, %Y")
+    
+    # Find all existing JSON files to build archive
+    json_files = sorted(output_dir.glob("raw_data_*.json"), reverse=True)
+    archive_dates = []
+    for json_file in json_files[:30]:  # Last 30 days
+        date_part = json_file.stem.replace("raw_data_", "")
+        try:
+            archive_date = datetime.datetime.strptime(date_part, "%Y-%m-%d")
+            archive_dates.append({
+                "date": date_part,
+                "formatted": archive_date.strftime("%B %d, %Y")
+            })
+        except:
+            pass
+    
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raw Tesla News & X Posts - {formatted_date} | Tesla Shorts Time</title>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 20px;
+        }}
+        .container {{
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }}
+        h1 {{
+            color: #e31937;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }}
+        .subtitle {{
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }}
+        .archive {{
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+        }}
+        .archive h2 {{
+            font-size: 1.2em;
+            margin-bottom: 10px;
+            color: #333;
+        }}
+        .archive-links {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }}
+        .archive-link {{
+            padding: 5px 12px;
+            background: #e31937;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }}
+        .archive-link:hover {{
+            background: #c0152d;
+        }}
+        .stats {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }}
+        .stat-card {{
+            background: linear-gradient(135deg, #e31937 0%, #c0152d 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }}
+        .stat-number {{
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }}
+        .stat-label {{
+            font-size: 0.9em;
+            opacity: 0.9;
+        }}
+        .section {{
+            margin-bottom: 40px;
+        }}
+        .section h2 {{
+            color: #e31937;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e31937;
+        }}
+        .article, .post {{
+            background: #f9f9f9;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #e31937;
+        }}
+        .article:hover, .post:hover {{
+            background: #f0f0f0;
+            transform: translateX(5px);
+            transition: all 0.2s;
+        }}
+        .article-title, .post-text {{
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+            color: #333;
+        }}
+        .article-meta, .post-meta {{
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }}
+        .article-link, .post-link {{
+            color: #e31937;
+            text-decoration: none;
+            font-weight: bold;
+        }}
+        .article-link:hover, .post-link:hover {{
+            text-decoration: underline;
+        }}
+        .engagement {{
+            display: inline-block;
+            background: #e31937;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.85em;
+            margin-left: 10px;
+        }}
+        .description {{
+            color: #555;
+            margin-top: 10px;
+            line-height: 1.5;
+        }}
+        @media (max-width: 768px) {{
+            .container {{
+                padding: 15px;
+            }}
+            h1 {{
+                font-size: 1.8em;
+            }}
+            .stats {{
+                grid-template-columns: 1fr;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚗⚡ Tesla Shorts Time - Raw Data</h1>
+        <p class="subtitle">Daily Raw News & X Posts Archive - {formatted_date}</p>
+        
+        <div class="archive">
+            <h2>📅 Archive</h2>
+            <div class="archive-links">
+                <a href="raw_data_index.html" class="archive-link">Today</a>
+"""
+    
+    # Add archive links
+    for archive_date in archive_dates:
+        if archive_date["date"] != date_str:
+            html += f'                <a href="raw_data_{archive_date["date"]}.html" class="archive-link">{archive_date["formatted"]}</a>\n'
+    
+    html += """            </div>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">""" + str(raw_data["newsapi"]["total_articles"]) + """</div>
+                <div class="stat-label">News Articles</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">""" + str(raw_data["x_api"]["total_posts"]) + """</div>
+                <div class="stat-label">X Posts</div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>📰 NewsAPI Articles (Raw)</h2>
+"""
+    
+    # Add news articles
+    for i, article in enumerate(raw_data["newsapi"]["articles"], 1):
+        title = html.escape(article.get("title", "No title"))
+        description = html.escape(article.get("description", "No description"))
+        url = html.escape(article.get("url", "#"))
+        source = html.escape(article.get("source", {}).get("name", "Unknown") if isinstance(article.get("source"), dict) else str(article.get("source", "Unknown")))
+        published = article.get("publishedAt", "Unknown")
+        author = html.escape(article.get("author", "Unknown"))
+        
+        html += f"""            <div class="article">
+                <div class="article-title">{i}. {title}</div>
+                <div class="article-meta">
+                    Source: {source} | Author: {author} | Published: {published}
+                </div>
+                <div class="description">{description}</div>
+                <a href="{url}" target="_blank" class="article-link">Read Article →</a>
+            </div>
+"""
+    
+    html += """        </div>
+        
+        <div class="section">
+            <h2>🐦 X Posts (Raw)</h2>
+"""
+    
+    # Add X posts
+    for i, post in enumerate(raw_data["x_api"]["posts"], 1):
+        text = html.escape(post.get("text", "No text"))
+        username = html.escape(post.get("username", "unknown"))
+        name = html.escape(post.get("name", "Unknown"))
+        url = html.escape(post.get("url", "#"))
+        created_at = post.get("created_at", "Unknown")
+        engagement = post.get("engagement", 0)
+        likes = post.get("likes", 0)
+        retweets = post.get("retweets", 0)
+        replies = post.get("replies", 0)
+        
+        html += f"""            <div class="post">
+                <div class="post-text">{i}. {text}</div>
+                <div class="post-meta">
+                    @{username} ({name}) | {created_at} | 
+                    ❤️ {likes} | 🔄 {retweets} | 💬 {replies}
+                    <span class="engagement">Engagement: {engagement:.0f}</span>
+                </div>
+                <a href="{url}" target="_blank" class="post-link">View Post →</a>
+            </div>
+"""
+    
+    html += """        </div>
+        
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #666;">
+            <p>Generated automatically by Tesla Shorts Time Daily</p>
+            <p><a href="https://github.com/patricknovak/Tesla-shorts-time" style="color: #e31937;">View on GitHub</a></p>
+        </div>
+    </div>
+</body>
+</html>"""
+    
+    return html
+
+# Save raw data and generate HTML
+raw_json_path, raw_html_path = save_raw_data_and_generate_html(
+    raw_newsapi_articles, 
+    raw_x_posts, 
+    digests_dir
+)
 
 # ========================== STEP 3: GENERATE X THREAD WITH GROK ==========================
 logging.info("Step 3: Generating Tesla Shorts Time digest with Grok using pre-fetched news and X posts...")
@@ -527,9 +887,10 @@ You are an elite Tesla news curator producing the daily "Tesla Shorts Time" news
 - If you cannot find enough pre-fetched content, output fewer items rather than making up links
 
 ### SELECTION RULES (ZERO EXCEPTIONS - MANDATORY COUNTS)
-**YOU MUST INCLUDE EXACTLY THESE COUNTS - NO EXCEPTIONS:**
-- **EXACTLY 5 unique news articles** from the pre-fetched list (prioritize highest quality sources)
-- **X POSTS: If you have pre-fetched X posts available, use ALL of them (up to 10 maximum). If you have 0 pre-fetched X posts, you MUST use web search to find exactly 10 X posts from the last 24 hours.**
+**YOU MUST INCLUDE EXACTLY THESE COUNTS - NO EXCEPTIONS - THIS IS MANDATORY:**
+- **EXACTLY 5 unique news articles** from the pre-fetched list (prioritize highest quality sources). YOU MUST HAVE EXACTLY 5 - NOT 4, NOT 6, EXACTLY 5.
+- **EXACTLY 10 X posts** - If you have pre-fetched X posts available, use ALL of them. If you have fewer than 10, you MUST use web search to find additional X posts to reach EXACTLY 10 total. If you have 0 pre-fetched X posts, you MUST use web search to find exactly 10 X posts from the last 24 hours.
+- **CRITICAL: The output MUST contain exactly 5 numbered news items (1. 2. 3. 4. 5.) and exactly 10 numbered X posts (1. 2. 3. 4. 5. 6. 7. 8. 9. 10.) - NO EXCEPTIONS**
 - **CRITICAL: When using web search for X posts, you MUST find real X post URLs (format: https://x.com/username/status/ID) from the last 24 hours. DO NOT make up or hallucinate URLs.**
 - **CRITICAL: All X post URLs MUST be in the exact format: https://x.com/username/status/ID where username is 1-15 characters and ID is a numeric status ID. Invalid URLs will be automatically removed.**
 - **CRITICAL: If there are 0 pre-fetched X posts, you MUST still output exactly 10 X posts by using web search to find real X posts from the last 24 hours.**
@@ -547,7 +908,9 @@ Use this exact structure and markdown (includes invisible zero-width spaces for 
 # Tesla Shorts Time
 **Date:** {today_str}
 **REAL-TIME TSLA price:** ${price:.2f}
-Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939
+🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939
+
+**CRITICAL: The podcast link MUST include the full URL. DO NOT truncate or shorten it.**
 
 ━━━━━━━━━━━━━━━━━━━━
 
@@ -634,17 +997,23 @@ Add a blank line after the sign-off.
 -If a pre-fetched item doesn't have a URL, skip it and choose a different item
 -Time stamps must be accurate PST/PDT (convert correctly)
 
-### FINAL VALIDATION BEFORE OUTPUT (MANDATORY)
-Before outputting, verify:
-1. ✅ Exactly 5 news items are included (numbered 1. 2. 3. 4. 5.) - each covering a DIFFERENT story
-2. ✅ X posts section includes all available pre-fetched X posts (up to 10 maximum). If 0 posts are available, the section may be empty or skipped. Each post covers a DIFFERENT topic/angle.
-3. ✅ All numbered lists use the format "1. " (number, period, space) - NOT bullet points or other formats
-4. ✅ Separator lines "━━━━━━━━━━━━━━━━━━━━" are included before each major section
-5. ✅ NO DUPLICATES: Each news item and X post covers a unique story/angle (no two items about the same news event)
-6. ✅ Short Spot section is included
-7. ✅ Short Squeeze section is included
-8. ✅ Daily Challenge section is included
-9. ✅ Inspiration Quote is included
+### FINAL VALIDATION BEFORE OUTPUT (MANDATORY - CHECK EACH ITEM)
+Before outputting, you MUST verify and ensure:
+1. ✅ **EXACTLY 5 news items** are included (numbered 1. 2. 3. 4. 5.) - each covering a DIFFERENT story. Count them: if you have 4, add one more. If you have 6, remove one.
+2. ✅ **EXACTLY 10 X posts** are included (numbered 1. 2. 3. 4. 5. 6. 7. 8. 9. 10.) - each covering a DIFFERENT topic/angle. Count them: if you have fewer than 10, use web search to find more. If you have more than 10, remove extras.
+3. ✅ **Podcast link is complete** with full URL: 🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939
+4. ✅ All numbered lists use the format "1. " (number, period, space) - NOT bullet points or other formats
+5. ✅ Separator lines "━━━━━━━━━━━━━━━━━━━━" are included before each major section
+6. ✅ NO DUPLICATES: Each news item and X post covers a unique story/angle (no two items about the same news event)
+7. ✅ Short Spot section is included
+8. ✅ Short Squeeze section is included
+9. ✅ Daily Challenge section is included
+10. ✅ Inspiration Quote is included
+
+**CRITICAL COUNT CHECK: Before submitting, physically count:**
+- News items: Must be exactly 5 (look for "1." through "5.")
+- X posts: Must be exactly 10 (look for "1." through "10.")
+- If counts are wrong, fix them before outputting.
 
 **SIMILARITY CHECK**: Review all 5 news items and all X posts (if any). If any two items cover the same story or make the same point, replace one with a different item. Each item must be unique.
 
@@ -700,6 +1069,21 @@ for line in x_thread.splitlines():
         break
     lines.append(line)
 x_thread = "\n".join(lines).strip()
+
+# Validate counts - check if we have exactly 5 news and 10 X posts
+import re
+news_count = len(re.findall(r'^[1-5][️⃣\.]\s+\*\*', x_thread, re.MULTILINE))
+x_posts_count = len(re.findall(r'^[1-9]|10[️⃣\.]\s+\*\*', x_thread, re.MULTILINE))
+# Also check for numbered lists without emojis
+if news_count < 5:
+    news_count = len(re.findall(r'^[1-5]\.\s+\*\*', x_thread, re.MULTILINE))
+if x_posts_count < 10:
+    x_posts_count = len(re.findall(r'^([1-9]|10)\.\s+\*\*', x_thread, re.MULTILINE))
+
+if news_count != 5:
+    logging.warning(f"⚠️  WARNING: Found {news_count} news items instead of 5. Grok may not have followed instructions.")
+if x_posts_count != 10:
+    logging.warning(f"⚠️  WARNING: Found {x_posts_count} X posts instead of 10. Grok may not have followed instructions.")
 
 # ========================== VALIDATE AND FIX LINKS ==========================
 logging.info("Validating and fixing links in the generated digest...")
@@ -878,29 +1262,58 @@ def format_digest_for_x(digest: str) -> str:
     # Format price line with emoji
     formatted = re.sub(r'\*\*REAL-TIME TSLA price:\*\*', '💰 **REAL-TIME TSLA price:**', formatted)
     
-    # Format podcast link with emoji
-    formatted = re.sub(r'Tesla Shorts Time Daily Podcast Link:', '🎙️ Tesla Shorts Time Daily Podcast Link:', formatted)
-    
-    # Ensure podcast link is always present (add it if missing)
+    # Ensure podcast link is always present with full URL (add it if missing or incomplete)
     podcast_link = '🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939'
-    if 'podcasts.apple.com/us/podcast/tesla-shorts-time' not in formatted:
+    podcast_url = 'https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939'
+    
+    # Check if the full URL is present (not just the text)
+    if podcast_url not in formatted:
+        # Remove any incomplete podcast link text that might be there (but keep lines with the full URL)
+        # Match lines that mention podcast but don't contain the full URL
+        lines = formatted.split('\n')
+        cleaned_lines = []
+        for line in lines:
+            # If line mentions podcast but doesn't have the full URL, skip it
+            if ('podcast' in line.lower() or '🎙️' in line) and podcast_url not in line:
+                continue
+            cleaned_lines.append(line)
+        formatted = '\n'.join(cleaned_lines)
+        
         # Find the price line and add podcast link after it
-        price_pattern = r'(\*\*REAL-TIME TSLA price:\*\*[^\n]+\n)'
+        price_pattern = r'(💰\s*\*\*REAL-TIME TSLA price:\*\*[^\n]+\n)'
         if re.search(price_pattern, formatted):
             formatted = re.sub(price_pattern, r'\1' + podcast_link + '\n\n', formatted)
         else:
-            # If price line not found, add after date line
-            date_pattern = r'(\*\*Date:\*\*[^\n]+\n)'
-            if re.search(date_pattern, formatted):
-                formatted = re.sub(date_pattern, r'\1' + podcast_link + '\n\n', formatted)
+            # Try without emoji
+            price_pattern = r'(\*\*REAL-TIME TSLA price:\*\*[^\n]+\n)'
+            if re.search(price_pattern, formatted):
+                formatted = re.sub(price_pattern, r'\1' + podcast_link + '\n\n', formatted)
             else:
-                # If neither found, add after header
-                header_pattern = r'(🚗⚡ \*\*Tesla Shorts Time\*\*\n)'
-                if re.search(header_pattern, formatted):
-                    formatted = re.sub(header_pattern, r'\1' + podcast_link + '\n\n', formatted)
+                # If price line not found, add after date line
+                date_pattern = r'(📅\s*\*\*Date:\*\*[^\n]+\n)'
+                if re.search(date_pattern, formatted):
+                    formatted = re.sub(date_pattern, r'\1' + podcast_link + '\n\n', formatted)
                 else:
-                    # Last resort: add at the beginning
-                    formatted = podcast_link + '\n\n' + formatted
+                    # Try without emoji
+                    date_pattern = r'(\*\*Date:\*\*[^\n]+\n)'
+                    if re.search(date_pattern, formatted):
+                        formatted = re.sub(date_pattern, r'\1' + podcast_link + '\n\n', formatted)
+                    else:
+                        # If neither found, add after header
+                        header_pattern = r'(🚗⚡\s*\*\*Tesla Shorts Time\*\*\n)'
+                        if re.search(header_pattern, formatted):
+                            formatted = re.sub(header_pattern, r'\1' + podcast_link + '\n\n', formatted)
+                        else:
+                            # Last resort: add at the beginning
+                            formatted = podcast_link + '\n\n' + formatted
+    else:
+        # URL is present, but make sure the format is correct with emoji
+        formatted = re.sub(
+            r'Tesla Shorts Time Daily Podcast Link:\s*' + re.escape(podcast_url),
+            '🎙️ Tesla Shorts Time Daily Podcast Link: ' + podcast_url,
+            formatted,
+            flags=re.IGNORECASE
+        )
     
     # Format section headers with emojis (preserve existing markdown)
     formatted = re.sub(r'^### Top 5 News Items', '📰 **Top 5 News Items**', formatted, flags=re.MULTILINE)
