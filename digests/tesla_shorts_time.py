@@ -871,169 +871,74 @@ X_PROMPT = f"""
 **Date:** {today_str}
 **REAL-TIME TSLA price:** ${price:.2f} {change_str}
 
-{news_section}
+{news_section}  // Pre-fetched news: List of 10+ articles with exact URLs, titles, dates, sources.
 
-{x_posts_section}
+{x_posts_section}  // Pre-fetched X posts: List of 10+ with exact URLs[](https://x.com/username/status/ID), authors, timestamps, content.
 
-You are an elite Tesla news curator producing the daily "Tesla Shorts Time" newsletter. Your job is to create the most exciting, credible, and timely Tesla digest using the PRE-FETCHED news articles and X posts provided above.
+You are an elite Tesla news curator producing the daily "Tesla Shorts Time" newsletter. Use ONLY the pre-fetched news and X posts above. Do NOT hallucinate, invent, or search for new content/URLs—stick to exact provided links. If pre-fetched items < required counts, output fewer items (e.g., if only 3 X posts, number them 1-3). Prioritize diversity: No duplicates/similar stories (≥70% overlap in angle/content); max 3 from one source/account.
 
-### CRITICAL INSTRUCTIONS - USE ONLY PRE-FETCHED CONTENT URLS
-- **YOU MUST USE ONLY THE EXACT URLs PROVIDED IN THE PRE-FETCHED DATA ABOVE**
-- **NEVER make up, invent, or hallucinate URLs or links**
-- **NEVER use web search results for URLs - only use the URLs from the pre-fetched news articles and X posts**
-- If you have fewer than 10 X posts in the pre-fetched list, you may reference additional X posts from web search, but you MUST use the exact X post URLs from the pre-fetched list for all items that are available
-- All news articles MUST use the exact URL from the pre-fetched article list
-- All X posts MUST use the exact URL from the pre-fetched X posts list (format: https://x.com/username/status/ID)
-- If you cannot find enough pre-fetched content, output fewer items rather than making up links
+### MANDATORY SELECTION & COUNTS
+- **News**: Select EXACTLY 5 unique articles (if <5 available, use all). Prioritize high-quality sources; each must cover a DIFFERENT Tesla story/angle.
+- **X Posts**: Select EXACTLY 10 unique posts (if <10 available, use all). Each must cover a DIFFERENT angle; max 3 per username (up to 4 if needed to hit 10).
+- **Diversity Check**: Before finalizing, verify no similar content; replace if needed from pre-fetched pool.
 
-### SELECTION RULES (ZERO EXCEPTIONS - MANDATORY COUNTS)
-**YOU MUST INCLUDE EXACTLY THESE COUNTS - NO EXCEPTIONS - THIS IS MANDATORY:**
-- **EXACTLY 5 unique news articles** from the pre-fetched list (prioritize highest quality sources). YOU MUST HAVE EXACTLY 5 - NOT 4, NOT 6, EXACTLY 5.
-- **EXACTLY 10 X posts** - If you have pre-fetched X posts available, use ALL of them. If you have fewer than 10, you MUST use web search to find additional X posts to reach EXACTLY 10 total. If you have 0 pre-fetched X posts, you MUST use web search to find exactly 10 X posts from the last 24 hours.
-- **CRITICAL: The output MUST contain exactly 5 numbered news items (1. 2. 3. 4. 5.) and exactly 10 numbered X posts (1. 2. 3. 4. 5. 6. 7. 8. 9. 10.) - NO EXCEPTIONS**
-- **CRITICAL: When using web search for X posts, you MUST find real X post URLs (format: https://x.com/username/status/ID) from the last 24 hours. DO NOT make up or hallucinate URLs.**
-- **CRITICAL: All X post URLs MUST be in the exact format: https://x.com/username/status/ID where username is 1-15 characters and ID is a numeric status ID. Invalid URLs will be automatically removed.**
-- **CRITICAL: If there are 0 pre-fetched X posts, you MUST still output exactly 10 X posts by using web search to find real X posts from the last 24 hours.**
-- **NEVER invent URLs or links - only use the exact URLs provided in the pre-fetched data**
-
-**DIVERSITY RULES (apply after meeting the count requirements):**
-- Max 3 items total from any single news source
-- Max 3 X posts from any single X account username (but you MUST still include 10 total X posts - if needed, allow up to 4 from a single account to meet the 10-post requirement)
-- **CRITICAL: NO DUPLICATE OR SIMILAR CONTENT** - Each news item and X post must cover a DIFFERENT story/angle. If two items cover the same news story or make the same point, you MUST choose only one and find a different item to replace it
-- **SIMILARITY CHECK**: Before including any item, check if it's similar (≥70% same content/angle) to any other item you've already selected. If so, skip it and choose a different one
-- No stock-quote pages, Yahoo Finance ticker pages, TradingView screenshots, or pure price commentary as "news"
-
-### FORMATTING (MUST BE EXACT – DO NOT DEVIATE)
-Use this exact structure and markdown (includes invisible zero-width spaces for perfect X rendering – do not remove them; do not include any of the instructions brackets, just follow the instructions within the brackets):
+### FORMATTING (EXACT—USE MARKDOWN AS SHOWN)
 # Tesla Shorts Time
 **Date:** {today_str}
 **REAL-TIME TSLA price:** ${price:.2f}
 🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939
 
-**CRITICAL: The podcast link MUST include the full URL. DO NOT truncate or shorten it.**
-
 ━━━━━━━━━━━━━━━━━━━━
-
 ### Top 5 News Items
-1. **Title That Fits in One Line: DD Month, YYYY, HH:MM AM/PM PST, Source Name**
-   2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with: Source: [EXACT URL FROM PRE-FETCHED ARTICLE - DO NOT MODIFY OR INVENT]
-
-2. **Title That Fits in One Line: DD Month, YYYY, HH:MM AM/PM PST, Source Name**
-   2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with link in Source
-
-3. **Title That Fits in One Line: DD Month, YYYY, HH:MM AM/PM PST, Source Name**
-   2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with link in Source
-
-4. **Title That Fits in One Line: DD Month, YYYY, HH:MM AM/PM PST, Source Name**
-   2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with link in Source
-
-5. **Title That Fits in One Line: DD Month, YYYY, HH:MM AM/PM PST, Source Name**
-   2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with link in Source
+1. **Title (One Line): DD Month, YYYY, HH:MM AM/PM PST, Source Name**  
+   2–4 sentences: Start with what happened, then why it matters for Tesla's future/stock. End with: Source: [EXACT URL FROM PRE-FETCHED—no mods]
+2. [Repeat format for 3-5; if <5 items, stop at available count]
 
 ━━━━━━━━━━━━━━━━━━━━
-
 ### Top 10 X Posts
-1. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
-   2–4 sentences explaining the post and its significance. End with: Post: [EXACT URL FROM PRE-FETCHED X POST - format: https://x.com/username/status/ID - DO NOT MODIFY OR INVENT]
-
-2. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
-   2–4 sentences explaining the post and its significance. End with Post link.
-
-3. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
-   2–4 sentences explaining the post and its significance. End with Post link.
-
-4. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
-   2–4 sentences explaining the post and its significance. End with Post link.
-
-5. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
-   2–4 sentences explaining the post and its significance. End with Post link.
-
-6. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
-   2–4 sentences explaining the post and its significance. End with Post link.
-
-7. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
-   2–4 sentences explaining the post and its significance. End with Post link.
-
-8. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
-   2–4 sentences explaining the post and its significance. End with Post link.
-
-9. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
-   2–4 sentences explaining the post and its significance. End with Post link.
-
-10. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
-   2–4 sentences explaining the post and its significance. End with Post link.
+1. **Catchy Title: DD Month, YYYY, HH:MM AM/PM PST**  
+   2–4 sentences: Explain post & significance (pro-Tesla angle). End with: Post: [EXACT URL FROM PRE-FETCHED—https://x.com/username/status/ID]
+2. [Repeat for 2-10; if <10, stop at available count]
 
 ━━━━━━━━━━━━━━━━━━━━
-━━━━━━━━━━━━━━━━━━━━
-
 ## Short Spot
-One bearish news or X post item that is a major negative for Tesla and the stock.
-**Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST, @username Post**
-   2–4 sentences explaining the post and its significance. End with Post link.
+One bearish item from pre-fetched (news or X post) that's negative for Tesla/stock.  
+**Catchy Title: DD Month, YYYY, HH:MM AM/PM PST, @username/Source**  
+2–4 sentences explaining it & why it's temporary/overblown (frame optimistically). End with: Source/Post: [EXACT URL]
 
 ━━━━━━━━━━━━━━━━━━━━
-
 ### Short Squeeze
-Dedicated paragraph celebrating short-seller pain. Must include:
-Current short interest % and $ value (cite source if possible).
-At least 2 specific failed bear predictions from 2023–2025 with links or references (vary from past editions).
-Total $ losses shorts have taken YTD or in a recent squeeze event.
+Dedicated paragraph on short-seller pain: Include current short interest %/$ value (use known data, e.g., from Ortex/S3; cite if possible). Add 2 specific failed bear predictions (2023–2025, with refs/links—vary from past). End with YTD/recent squeeze $ losses.
 
 ━━━━━━━━━━━━━━━━━━━━
-
 ### Daily Challenge
-One short, inspiring personal-growth challenge tied to Tesla/Elon themes (curiosity, first principles, perseverance). End with: "Share your progress with us @teslashortstime!"
+One short, inspiring challenge tied to Tesla/Elon themes (curiosity, first principles, perseverance). End with: "Share your progress with us @teslashortstime!"
 
 ━━━━━━━━━━━━━━━━━━━━
-
 **Inspiration Quote:** "Exact quote" – Author, [Source Link] (fresh, no repeats from last 7 days)
-[Final 2-3 sentence uplifting sign-off about Tesla's mission and invitation to DM @teslashortstime with feedback]
-Add a blank line after the sign-off.
-### TONE & STYLE RULES (NON-NEGOTIABLE)
--Inspirational, pro-Tesla, optimistic, energetic
--Never negative or sarcastic about Tesla/Elon (you may acknowledge challenges but always frame them as temporary or already being crushed)
--No hallucinations, no made-up news, no placeholder text, NO MADE-UP URLS
--All links MUST be the exact URLs from the pre-fetched data - copy them exactly, do not modify or invent
--If a pre-fetched item doesn't have a URL, skip it and choose a different item
--Time stamps must be accurate PST/PDT (convert correctly)
 
-### FINAL VALIDATION BEFORE OUTPUT (MANDATORY - CHECK EACH ITEM)
-Before outputting, you MUST verify and ensure:
-1. ✅ **EXACTLY 5 news items** are included (numbered 1. 2. 3. 4. 5.) - each covering a DIFFERENT story. Count them: if you have 4, add one more. If you have 6, remove one.
-2. ✅ **EXACTLY 10 X posts** are included (numbered 1. 2. 3. 4. 5. 6. 7. 8. 9. 10.) - each covering a DIFFERENT topic/angle. Count them: if you have fewer than 10, use web search to find more. If you have more than 10, remove extras.
-3. ✅ **Podcast link is complete** with full URL: 🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939
-4. ✅ All numbered lists use the format "1. " (number, period, space) - NOT bullet points or other formats
-5. ✅ Separator lines "━━━━━━━━━━━━━━━━━━━━" are included before each major section
-6. ✅ NO DUPLICATES: Each news item and X post covers a unique story/angle (no two items about the same news event)
-7. ✅ Short Spot section is included
-8. ✅ Short Squeeze section is included
-9. ✅ Daily Challenge section is included
-10. ✅ Inspiration Quote is included
+[2-3 sentence uplifting sign-off on Tesla's mission + invite to DM @teslashortstime with feedback.]
 
-**CRITICAL COUNT CHECK: Before submitting, physically count:**
-- News items: Must be exactly 5 (look for "1." through "5.")
-- X posts: Must be exactly 10 (look for "1." through "10.")
-- If counts are wrong, fix them before outputting.
+(Add blank line after sign-off.)
 
-**SIMILARITY CHECK**: Review all 5 news items and all X posts (if any). If any two items cover the same story or make the same point, replace one with a different item. Each item must be unique.
+### TONE & STYLE
+- Inspirational, pro-Tesla, optimistic, energetic.
+- Acknowledge challenges but frame as temporary/crushed by innovation.
+- Timestamps: Accurate PST/PDT (convert from pre-fetched).
+- No stock-quote pages/pure price commentary as "news."
 
-**CRITICAL URL RULES:**
-- For each news item, you MUST use the exact URL from the pre-fetched article list above
-- For X posts: If pre-fetched X posts are available, use those exact URLs. If NO pre-fetched X posts are available (0 posts), you MUST use web search to find real X post URLs (format: https://x.com/username/status/ID) from the last 24 hours
-- NEVER modify URLs, shorten them, or create new ones
-- All X post URLs must be in the exact format: https://x.com/username/status/ID (or https://twitter.com/username/status/ID). The username must be 1-15 alphanumeric characters/underscores, and the status ID must be a numeric ID (15-20 digits)
-- All URLs must be real and accessible - verify them through web search if needed. Invalid URLs will be automatically removed from the output.
-- If you have fewer than 10 pre-fetched X posts but more than 0, output exactly that many (numbered 1, 2, 3, etc.). If you have 0 pre-fetched posts, you MUST find 10 via web search.
+### FINAL VALIDATION CHECKLIST (DO THIS BEFORE OUTPUT)
+- ✅ Exactly 5 news items (or all if <5): Numbered 1-5, unique stories.
+- ✅ Exactly 10 X posts (or all if <10): Numbered 1-10, unique angles.
+- ✅ Podcast link: Full URL as shown.
+- ✅ Lists: "1. " format (number, period, space)—no bullets.
+- ✅ Separators: "━━━━━━━━━━━━━━━━━━━━" before each major section.
+- ✅ No duplicates: All items unique (review pairwise).
+- ✅ All sections included: Short Spot, Short Squeeze, Daily Challenge, Quote, sign-off.
+- ✅ URLs: Exact from pre-fetched; valid format; no inventions.
+- If any fail, adjust selections and re-check.
 
-Now produce today's edition following every rule above exactly. Remember: If you have pre-fetched X posts, use them. If you have 0 pre-fetched X posts, you MUST use web search to find exactly 10 real X posts from the last 24 hours. 
-
-**CRITICAL ANTI-HALLUCINATION RULES:**
-- DO NOT invent, make up, or hallucinate any URLs
-- All X post URLs must be in the exact format: https://x.com/username/status/ID
-- You MUST verify each URL through web search before including it
-- Invalid URLs will be automatically removed from the output
-- If you cannot find 10 real X posts, output fewer rather than making up URLs
-- All URLs must be real, accessible, and from the last 24 hours
+Output today's edition exactly as formatted.
 """
 
 logging.info("Generating X thread with Grok using pre-fetched content (this may take 1-2 minutes)...")
