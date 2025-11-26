@@ -51,6 +51,7 @@ jobs:
         X_CONSUMER_SECRET=${{ secrets.X_CONSUMER_SECRET }}
         X_ACCESS_TOKEN=${{ secrets.X_ACCESS_TOKEN }}
         X_ACCESS_TOKEN_SECRET=${{ secrets.X_ACCESS_TOKEN_SECRET }}
+        X_BEARER_TOKEN=${{ secrets.X_BEARER_TOKEN }}
         EOF
         echo ".env file created (checking if keys are set)..."
         if [ -z "${{ secrets.GROK_API_KEY }}" ]; then
@@ -67,6 +68,32 @@ jobs:
           echo "⚠️  WARNING: NEWSAPI_KEY is not set!"
         else
           echo "✅ NEWSAPI_KEY is set"
+        fi
+        echo "Checking X API credentials..."
+        if [ -z "${{ secrets.X_CONSUMER_KEY }}" ]; then
+          echo "❌ ERROR: X_CONSUMER_KEY is not set!"
+        else
+          echo "✅ X_CONSUMER_KEY is set"
+        fi
+        if [ -z "${{ secrets.X_CONSUMER_SECRET }}" ]; then
+          echo "❌ ERROR: X_CONSUMER_SECRET is not set!"
+        else
+          echo "✅ X_CONSUMER_SECRET is set"
+        fi
+        if [ -z "${{ secrets.X_ACCESS_TOKEN }}" ]; then
+          echo "❌ ERROR: X_ACCESS_TOKEN is not set!"
+        else
+          echo "✅ X_ACCESS_TOKEN is set"
+        fi
+        if [ -z "${{ secrets.X_ACCESS_TOKEN_SECRET }}" ]; then
+          echo "❌ ERROR: X_ACCESS_TOKEN_SECRET is not set!"
+        else
+          echo "✅ X_ACCESS_TOKEN_SECRET is set"
+        fi
+        if [ -z "${{ secrets.X_BEARER_TOKEN }}" ]; then
+          echo "⚠️  WARNING: X_BEARER_TOKEN is not set (optional but recommended)"
+        else
+          echo "✅ X_BEARER_TOKEN is set"
         fi
         
     - name: Run Tesla Shorts Time script
