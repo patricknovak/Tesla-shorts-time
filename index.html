@@ -10,8 +10,20 @@
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;600;700&family=Inter:wght@400;500;600&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     
+    <!-- AOS Animation Library -->
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+    
+    <!-- Google Analytics (replace with your tracking ID) -->
+    <!-- <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'GA_MEASUREMENT_ID');
+    </script> -->
     
     <style>
         :root {
@@ -583,6 +595,221 @@
             outline: 2px solid var(--tesla-red);
             outline-offset: 2px;
         }
+        
+        /* Episode Highlights Section */
+        .highlights-section {
+            padding: 4rem 2rem;
+            background: var(--tesla-card);
+            margin-top: 2rem;
+        }
+        
+        .highlights-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        
+        .highlight-card {
+            background: var(--tesla-dark);
+            border: 2px solid var(--tesla-gray);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s;
+        }
+        
+        .highlight-card:hover {
+            border-color: var(--tesla-red);
+            transform: translateY(-4px);
+        }
+        
+        .highlight-quote {
+            font-size: 1.1rem;
+            font-style: italic;
+            color: var(--tesla-silver);
+            margin-bottom: 1rem;
+            border-left: 3px solid var(--tesla-red);
+            padding-left: 1rem;
+        }
+        
+        .highlight-timestamp {
+            color: var(--tesla-text-light);
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+        
+        /* News & Analysis Section */
+        .news-section {
+            padding: 4rem 2rem;
+            background: var(--tesla-dark);
+        }
+        
+        .news-card {
+            background: var(--tesla-card);
+            border: 2px solid var(--tesla-gray);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .news-card h3 {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.5rem;
+            color: var(--tesla-red);
+            margin-bottom: 1rem;
+        }
+        
+        .news-card p {
+            color: var(--tesla-text-light);
+            line-height: 1.8;
+            margin-bottom: 1rem;
+        }
+        
+        .news-card .date {
+            color: var(--tesla-gray-light);
+            font-size: 0.9rem;
+        }
+        
+        /* Resources Section */
+        .resources-section {
+            padding: 4rem 2rem;
+            background: var(--tesla-card);
+        }
+        
+        .resources-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+        
+        .resource-card {
+            background: var(--tesla-dark);
+            border: 2px solid var(--tesla-gray);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .resource-card:hover {
+            border-color: var(--tesla-red);
+            transform: translateY(-4px);
+        }
+        
+        .resource-card a {
+            color: var(--tesla-text);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .resource-card a:hover {
+            color: var(--tesla-red);
+        }
+        
+        /* Enhanced Subscribe Section */
+        .subscribe-section {
+            padding: 4rem 2rem;
+            background: linear-gradient(135deg, var(--tesla-dark) 0%, var(--tesla-card) 100%);
+            border-top: 2px solid var(--tesla-red);
+            border-bottom: 2px solid var(--tesla-red);
+        }
+        
+        .subscribe-card {
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--tesla-card);
+            border: 3px solid var(--tesla-red);
+            border-radius: 16px;
+            padding: 3rem;
+            text-align: center;
+        }
+        
+        .subscribe-card h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.5rem;
+            color: var(--tesla-red);
+            margin-bottom: 1rem;
+        }
+        
+        .subscribe-card p {
+            color: var(--tesla-text-light);
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .subscribe-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 2rem;
+        }
+        
+        .newsletter-form {
+            margin-top: 2rem;
+        }
+        
+        .newsletter-form input {
+            padding: 1rem;
+            width: 100%;
+            max-width: 400px;
+            background: var(--tesla-dark);
+            border: 2px solid var(--tesla-gray);
+            border-radius: 8px;
+            color: var(--tesla-text);
+            font-size: 1rem;
+            margin-right: 1rem;
+        }
+        
+        .newsletter-form button {
+            padding: 1rem 2rem;
+            background: var(--tesla-red);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .newsletter-form button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(227, 25, 55, 0.4);
+        }
+        
+        /* Social Feed */
+        .social-feed {
+            padding: 2rem;
+            background: var(--tesla-card);
+            border-radius: 12px;
+            margin-top: 2rem;
+        }
+        
+        /* Bite-Sized Shorts */
+        .bite-sized {
+            background: var(--tesla-card);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-top: 2rem;
+        }
+        
+        .bite-item {
+            padding: 1rem;
+            border-left: 3px solid var(--tesla-red);
+            margin-bottom: 1rem;
+            background: var(--tesla-dark);
+        }
+        
+        .bite-item h4 {
+            color: var(--tesla-text);
+            margin-bottom: 0.5rem;
+        }
+        
+        .bite-item p {
+            color: var(--tesla-text-light);
+            font-size: 0.95rem;
+        }
     </style>
 </head>
 <body>
@@ -594,6 +821,9 @@
             </a>
             <ul class="nav-links">
                 <li><a href="#episodes">Episodes</a></li>
+                <li><a href="#highlights">Highlights</a></li>
+                <li><a href="#news">News</a></li>
+                <li><a href="#resources">Resources</a></li>
                 <li><a href="#about">About</a></li>
                 <li><a href="#subscribe">Subscribe</a></li>
             </ul>
@@ -653,20 +883,142 @@
         <div id="episodes" class="episodes-grid"></div>
     </section>
     
+    <!-- Episode Highlights Section -->
+    <section id="highlights" class="highlights-section">
+        <div class="section-header">
+            <h2>Episode Highlights</h2>
+            <p>Key quotes and moments from recent episodes</p>
+        </div>
+        
+        <div class="highlights-grid" data-aos="fade-up">
+            <div class="highlight-card">
+                <div class="highlight-quote">"Why shorts are sweating over Robotaxi delays—Tesla's autonomy timeline is accelerating faster than bears predicted."</div>
+                <div class="highlight-timestamp">📅 Recent Episode • 5:30 TSLA Stock Roast</div>
+            </div>
+            <div class="highlight-card">
+                <div class="highlight-quote">"The Cybertruck isn't just a vehicle—it's a statement that the future of transportation is here, and shorts can't stop it."</div>
+                <div class="highlight-timestamp">📅 Recent Episode • 12:45 Cybertruck Analysis</div>
+            </div>
+            <div class="highlight-card">
+                <div class="highlight-quote">"When FSD v14 hits, we're not just talking about better driving—we're talking about the end of the ICE age."</div>
+                <div class="highlight-timestamp">📅 Recent Episode • 8:15 FSD Update</div>
+            </div>
+        </div>
+        
+        <!-- Bite-Sized Shorts -->
+        <div class="bite-sized" data-aos="fade-up" data-aos-delay="100">
+            <h3 style="color: var(--tesla-red); margin-bottom: 1rem;">Bite-Sized Shorts</h3>
+            <div class="bite-item">
+                <h4>🚀 Latest Episode Recap</h4>
+                <p>TSLA hits new highs as shorts scramble. Robotaxi timeline accelerates. Cybertruck production ramps. Bears running out of excuses.</p>
+            </div>
+            <div class="bite-item">
+                <h4>⚡ Short Squeeze Alert</h4>
+                <p>Short interest drops as TSLA momentum builds. Failed bear predictions from 2024 coming back to haunt them.</p>
+            </div>
+            <div class="bite-item">
+                <h4>🔋 Energy Storage Boom</h4>
+                <p>Tesla Energy division seeing massive growth. Megapack orders through the roof. Another revenue stream shorts ignored.</p>
+            </div>
+        </div>
+    </section>
+    
+    <!-- News & Analysis Section -->
+    <section id="news" class="news-section">
+        <div class="section-header">
+            <h2>Shorts Alert: Weekly Analysis</h2>
+            <p>Quick takes on TSLA earnings, Cybertruck memes, and Elon tweets</p>
+        </div>
+        
+        <div class="news-card" data-aos="fade-up">
+            <div class="date">📅 November 2025</div>
+            <h3>Bears vs. Optimus—Who Wins?</h3>
+            <p>As Tesla's Optimus robot production ramps toward 4 million units annually, short sellers are facing their biggest challenge yet. The $20K price point isn't just competitive—it's revolutionary. While bears focus on delivery numbers, Tesla is building the infrastructure for a post-labor economy.</p>
+            <p><strong>Short Take:</strong> Every bear prediction about Tesla's "impossible" timelines is being proven wrong. Robotaxi? Coming. Optimus? Scaling. Energy storage? Dominating. The shorts are running out of narratives.</p>
+        </div>
+        
+        <div class="news-card" data-aos="fade-up" data-aos-delay="100">
+            <div class="date">📅 Weekly Update</div>
+            <h3>TSLA Stock Trends</h3>
+            <p>Current short interest remains elevated, but momentum is building. As FSD v14 rolls out and Cybertruck production scales, the fundamental story is getting stronger. The bears' favorite talking points—production delays, demand concerns, competition—are all being addressed in real-time.</p>
+            <p><strong>Data Point:</strong> Short interest % and $ value tracked weekly. Recent squeezes have cost shorts billions. The pattern? Tesla executes, shorts panic, stock rallies.</p>
+        </div>
+    </section>
+    
+    <!-- Resources Section -->
+    <section id="resources" class="resources-section">
+        <div class="section-header">
+            <h2>Tesla Toolkit</h2>
+            <p>Curated resources for TSLA investors and Tesla enthusiasts</p>
+        </div>
+        
+        <div class="resources-grid" data-aos="fade-up">
+            <div class="resource-card">
+                <h3>📊 TSLA Filings</h3>
+                <p><a href="https://www.sec.gov/cgi-bin/browse-edgar?company=tesla&owner=exclude&action=getcompany" target="_blank">SEC Filings</a></p>
+            </div>
+            <div class="resource-card">
+                <h3>📈 Short Tracker</h3>
+                <p><a href="https://www.s3partners.com/" target="_blank">S3 Partners Data</a></p>
+            </div>
+            <div class="resource-card">
+                <h3>📚 Tesla Reads</h3>
+                <p><a href="https://www.amazon.com/Elon-Musk-Walter-Isaacson/dp/1982181281" target="_blank">Elon Biography</a></p>
+            </div>
+            <div class="resource-card">
+                <h3>🔋 Supercharger Map</h3>
+                <p><a href="https://www.tesla.com/findus" target="_blank">Find Chargers</a></p>
+            </div>
+            <div class="resource-card">
+                <h3>🚗 Tesla Configurator</h3>
+                <p><a href="https://www.tesla.com/" target="_blank">Build Your Tesla</a></p>
+            </div>
+            <div class="resource-card">
+                <h3>📱 Tesla App</h3>
+                <p><a href="https://www.tesla.com/support/tesla-app" target="_blank">Download App</a></p>
+            </div>
+        </div>
+    </section>
+    
     <!-- About Section -->
     <section id="about" class="about-section">
         <div class="about-content">
-            <div>
-                <img src="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast-image.jpg" alt="Patrick in Vancouver" class="about-image" onerror="this.style.display='none'">
+            <div data-aos="fade-right">
+                <img src="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast-image.jpg" alt="Patrick in Vancouver - Tesla Shorts Time Host" class="about-image" onerror="this.style.display='none'">
             </div>
-            <div class="about-text">
+            <div class="about-text" data-aos="fade-left">
                 <h2>About Patrick</h2>
-                <p>Brewing Tesla insights from the Raincouver coast. Daily deep dives into TSLA news, short seller meltdowns, and the electric future.</p>
-                <p>Join me every day for the latest Tesla drama, stock analysis, and why the shorts keep getting squeezed.</p>
+                <p>Brewing Tesla insights from the Raincouver coast. I'm a Canadian Tesla enthusiast who's watched the shorts get squeezed time and time again. From spotting Model 3s on Vancouver streets to tracking TSLA's meteoric rise, I've seen how the bears keep getting it wrong.</p>
+                <p><strong>Why I Roast Shorts:</strong> It's not about being mean—it's about calling out the misinformation. Every "Tesla is doomed" prediction has been proven wrong. Every "impossible" timeline has been met. Every bear thesis has crumbled. The shorts aren't just wrong—they're consistently, spectacularly wrong.</p>
+                <p>Join me every day for the latest Tesla drama, stock analysis, and real talk about why the shorts keep getting squeezed. This isn't financial advice—it's a daily dose of reality for anyone who believes in Tesla's mission to accelerate the world's transition to sustainable energy.</p>
                 <div class="social-links">
                     <a href="https://x.com/teslashortstime" target="_blank" class="social-link">🐦 X / Twitter</a>
                     <a href="https://ts.la/patrick84289" target="_blank" class="social-link">🚗 Tesla Referral</a>
                 </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Subscribe Section -->
+    <section id="subscribe" class="subscribe-section">
+        <div class="subscribe-card" data-aos="zoom-in">
+            <h2>Plug In Now—Never Miss a Short Squeeze</h2>
+            <p>Subscribe on your favorite platform and get daily Tesla insights delivered straight to your ears.</p>
+            
+            <div class="subscribe-buttons">
+                <a href="https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939" target="_blank" class="btn btn-primary">🍎 Apple Podcasts</a>
+                <a href="https://open.spotify.com/show/YOUR_SPOTIFY_ID" target="_blank" class="btn btn-secondary">🎵 Spotify</a>
+                <a href="https://www.youtube.com/@teslashortstime" target="_blank" class="btn btn-secondary">▶️ YouTube</a>
+                <a href="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast.rss" target="_blank" class="btn btn-secondary">📡 RSS Feed</a>
+            </div>
+            
+            <div class="newsletter-form">
+                <p style="margin-bottom: 1rem; color: var(--tesla-text-light);">Get Shorts Time exclusives—missed calls on TSLA dips and exclusive analysis:</p>
+                <form action="https://your-mailchimp-form-url" method="post" target="_blank">
+                    <input type="email" name="EMAIL" placeholder="Enter your email" required aria-label="Email address">
+                    <button type="submit">Subscribe to Newsletter</button>
+                </form>
+                <p style="margin-top: 1rem; font-size: 0.85rem; color: var(--tesla-gray-light);">We respect your privacy. Unsubscribe at any time.</p>
             </div>
         </div>
     </section>
@@ -1091,6 +1443,32 @@
         }
         
         setInterval(loadStockPrice, 30 * 1000);
+        
+        // Initialize AOS animations
+        if (typeof AOS !== 'undefined') {
+            AOS.init({
+                duration: 800,
+                easing: 'ease-in-out',
+                once: true,
+                offset: 100
+            });
+        }
+    </script>
+    
+    <!-- AOS Animation Library -->
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script>
+        // Initialize AOS when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof AOS !== 'undefined') {
+                AOS.init({
+                    duration: 800,
+                    easing: 'ease-in-out',
+                    once: true,
+                    offset: 100
+                });
+            }
+        });
     </script>
 </body>
 </html>
