@@ -275,13 +275,60 @@ def fetch_top_x_posts():
     
     import tweepy
     
-    x_client = tweepy.Client(
-        consumer_key=os.getenv("X_CONSUMER_KEY"),
-        consumer_secret=os.getenv("X_CONSUMER_SECRET"),
-        access_token=os.getenv("X_ACCESS_TOKEN"),
-        access_token_secret=os.getenv("X_ACCESS_TOKEN_SECRET"),
-        wait_on_rate_limit=True
-    )
+    # Check if credentials are available
+    consumer_key = os.getenv("X_CONSUMER_KEY")
+    consumer_secret = os.getenv("X_CONSUMER_SECRET")
+    access_token = os.getenv("X_ACCESS_TOKEN")
+    access_token_secret = os.getenv("X_ACCESS_TOKEN_SECRET")
+    bearer_token = os.getenv("X_BEARER_TOKEN")  # Optional Bearer Token
+    
+    # Validate credentials are not empty
+    if not all([consumer_key, consumer_secret, access_token, access_token_secret]):
+        missing = [k for k, v in [
+            ("X_CONSUMER_KEY", consumer_key),
+            ("X_CONSUMER_SECRET", consumer_secret),
+            ("X_ACCESS_TOKEN", access_token),
+            ("X_ACCESS_TOKEN_SECRET", access_token_secret)
+        ] if not v]
+        logging.error(f"Missing or empty X API credentials: {', '.join(missing)}")
+        logging.error("Please check your GitHub Secrets and ensure all X API credentials are set correctly.")
+        return []
+    
+    # Try Bearer Token first if available (simpler auth, works for read-only operations)
+    x_client = None
+    if bearer_token:
+        try:
+            logging.info("Attempting X API authentication with Bearer Token...")
+            x_client = tweepy.Client(
+                bearer_token=bearer_token,
+                wait_on_rate_limit=True
+            )
+            logging.info("✅ Bearer Token client initialized")
+        except Exception as e:
+            logging.warning(f"Failed to initialize with Bearer Token: {e}")
+            x_client = None
+    
+    # Fall back to OAuth 1.0a if Bearer Token not available or failed
+    if x_client is None:
+        try:
+            logging.info("Attempting X API authentication with OAuth 1.0a...")
+            x_client = tweepy.Client(
+                consumer_key=consumer_key,
+                consumer_secret=consumer_secret,
+                access_token=access_token,
+                access_token_secret=access_token_secret,
+                wait_on_rate_limit=True
+            )
+            logging.info("✅ OAuth 1.0a client initialized")
+        except Exception as e:
+            logging.error(f"Failed to initialize X API client: {e}")
+            logging.error("Please verify your X API credentials in GitHub Secrets:")
+            logging.error("  - X_CONSUMER_KEY")
+            logging.error("  - X_CONSUMER_SECRET")
+            logging.error("  - X_ACCESS_TOKEN")
+            logging.error("  - X_ACCESS_TOKEN_SECRET")
+            logging.error("  - X_BEARER_TOKEN (optional, but recommended for search)")
+            return []
     
     # Calculate date range (last 24 hours)
     since_time = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)).isoformat()
@@ -360,9 +407,33 @@ def fetch_top_x_posts():
                                 "retweets": retweet_count,
                                 "replies": reply_count
                             })
+            except tweepy.Unauthorized as e:
+                logging.error(f"❌ X API Authentication failed (401 Unauthorized) for query '{query}': {e}")
+                logging.error("This usually means:")
+                logging.error("  1. X API credentials in GitHub Secrets are incorrect or expired")
+                logging.error("  2. The Bearer Token or OAuth credentials don't have search permissions")
+                logging.error("  3. The X API app doesn't have the required access level")
+                logging.error("Please verify your X API credentials in GitHub Secrets:")
+                logging.error("  - X_CONSUMER_KEY")
+                logging.error("  - X_CONSUMER_SECRET")
+                logging.error("  - X_ACCESS_TOKEN")
+                logging.error("  - X_ACCESS_TOKEN_SECRET")
+                logging.error("  - X_BEARER_TOKEN (optional but recommended for search)")
+                # Don't continue with other queries if auth is failing
+                break
+            except tweepy.Forbidden as e:
+                logging.error(f"❌ X API Forbidden (403) for query '{query}': {e}")
+                logging.error("This usually means the API credentials don't have permission to search.")
+                break
             except Exception as e:
-                logging.warning(f"Error searching with query '{query}': {e}")
-                continue
+                error_msg = str(e)
+                if "401" in error_msg or "Unauthorized" in error_msg:
+                    logging.error(f"❌ X API Authentication failed (401) for query '{query}': {e}")
+                    logging.error("Please check your X API credentials in GitHub Secrets.")
+                    break
+                else:
+                    logging.warning(f"Error searching with query '{query}': {e}")
+                    continue
         
         # Sort by engagement and get top posts
         all_posts.sort(key=lambda x: x["engagement"], reverse=True)
