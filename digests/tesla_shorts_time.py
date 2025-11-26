@@ -446,18 +446,22 @@ X_PROMPT = f"""
 
 You are an elite Tesla news curator producing the daily "Tesla Shorts Time" newsletter. Your job is to create the most exciting, credible, and timely Tesla digest using the PRE-FETCHED news articles and X posts provided above.
 
-### CRITICAL INSTRUCTIONS - USE PRE-FETCHED CONTENT (SEARCH IF NEEDED)
-- You MUST prioritize the PRE-FETCHED news articles and X posts provided above
-- If you have fewer than 10 X posts in the pre-fetched list, you MUST use web search and X search tools to find additional X posts to reach exactly 10
-- All news articles and X posts must be from the last 24 hours
-- The requirement for exactly 10 X posts takes priority over using only pre-fetched content
+### CRITICAL INSTRUCTIONS - USE ONLY PRE-FETCHED CONTENT URLS
+- **YOU MUST USE ONLY THE EXACT URLs PROVIDED IN THE PRE-FETCHED DATA ABOVE**
+- **NEVER make up, invent, or hallucinate URLs or links**
+- **NEVER use web search results for URLs - only use the URLs from the pre-fetched news articles and X posts**
+- If you have fewer than 10 X posts in the pre-fetched list, you may reference additional X posts from web search, but you MUST use the exact X post URLs from the pre-fetched list for all items that are available
+- All news articles MUST use the exact URL from the pre-fetched article list
+- All X posts MUST use the exact URL from the pre-fetched X posts list (format: https://x.com/username/status/ID)
+- If you cannot find enough pre-fetched content, output fewer items rather than making up links
 
 ### SELECTION RULES (ZERO EXCEPTIONS - MANDATORY COUNTS)
 **YOU MUST INCLUDE EXACTLY THESE COUNTS - NO EXCEPTIONS:**
 - **EXACTLY 5 unique news articles** from the pre-fetched list (prioritize highest quality sources)
 - **EXACTLY 10 unique X posts** from the pre-fetched list (prioritize highest engagement scores)
-- If you cannot find 10 unique X posts from the pre-fetched list, you MUST use all available X posts and then use web search to find additional X posts to reach exactly 10
-- **CRITICAL: The output MUST contain exactly 10 X posts numbered 1 through 10. If you output fewer than 10, the output is INVALID and must be regenerated.**
+- **CRITICAL: If you have fewer than 10 X posts in the pre-fetched list, you MUST use ALL available pre-fetched X posts and output exactly that many (even if less than 10). DO NOT make up or hallucinate X post URLs.**
+- **CRITICAL: The output MUST contain exactly the number of X posts available in the pre-fetched list (up to 10). If you have 8 pre-fetched posts, output exactly 8. If you have 10+, output exactly 10.**
+- **NEVER invent URLs or links - only use the exact URLs provided in the pre-fetched data**
 
 **DIVERSITY RULES (apply after meeting the count requirements):**
 - Max 3 items total from any single news source
@@ -477,7 +481,7 @@ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesl
 
 ### Top 5 News Items
 1. **Title That Fits in One Line: DD Month, YYYY, HH:MM AM/PM PST, Source Name**
-   2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with link in Source
+   2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with: Source: [EXACT URL FROM PRE-FETCHED ARTICLE - DO NOT MODIFY OR INVENT]
 
 2. **Title That Fits in One Line: DD Month, YYYY, HH:MM AM/PM PST, Source Name**
    2–4 sentence summary starting with what happened, then why it matters for Tesla's future and stock. End with link in Source
@@ -495,7 +499,7 @@ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesl
 
 ### Top 10 X Posts
 1. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
-   2–4 sentences explaining the post and its significance. End with Post link.
+   2–4 sentences explaining the post and its significance. End with: Post: [EXACT URL FROM PRE-FETCHED X POST - format: https://x.com/username/status/ID - DO NOT MODIFY OR INVENT]
 
 2. **Catchy Title for the Post: DD Month, YYYY, HH:MM AM/PM PST**
    2–4 sentences explaining the post and its significance. End with Post link.
@@ -553,8 +557,9 @@ Add a blank line after the sign-off.
 ### TONE & STYLE RULES (NON-NEGOTIABLE)
 -Inspirational, pro-Tesla, optimistic, energetic
 -Never negative or sarcastic about Tesla/Elon (you may acknowledge challenges but always frame them as temporary or already being crushed)
--No hallucinations, no made-up news, no placeholder text
--All links must be real and working
+-No hallucinations, no made-up news, no placeholder text, NO MADE-UP URLS
+-All links MUST be the exact URLs from the pre-fetched data - copy them exactly, do not modify or invent
+-If a pre-fetched item doesn't have a URL, skip it and choose a different item
 -Time stamps must be accurate PST/PDT (convert correctly)
 
 ### FINAL VALIDATION BEFORE OUTPUT (MANDATORY)
@@ -571,7 +576,12 @@ Before outputting, verify:
 
 **SIMILARITY CHECK**: Review all 5 news items and all 10 X posts. If any two items cover the same story or make the same point, replace one with a different item. Each item must be unique.
 
-**IF YOU DO NOT HAVE EXACTLY 10 X POSTS NUMBERED 1 THROUGH 10, DO NOT OUTPUT. Instead, search for additional X posts or use all available pre-fetched posts to reach exactly 10. The output is INVALID if it contains fewer than 10 X posts.**
+**CRITICAL URL RULES:**
+- For each news item, you MUST use the exact URL from the pre-fetched article list above
+- For each X post, you MUST use the exact URL from the pre-fetched X posts list above (format: https://x.com/username/status/ID)
+- If you cannot match an output item to a pre-fetched URL, DO NOT include that item - choose a different pre-fetched item instead
+- NEVER modify URLs, shorten them, or create new ones
+- If you have fewer than 10 pre-fetched X posts, output exactly that many (numbered 1, 2, 3, etc.) - DO NOT make up additional posts or URLs
 
 Now produce today's edition following every rule above exactly. Remember: EXACTLY 10 X POSTS IS MANDATORY.
 """
@@ -583,8 +593,9 @@ try:
         messages=[{"role": "user", "content": X_PROMPT}],
         temperature=0.7,
         max_tokens=4000,
-        # Search can still be enabled as fallback, but primary content comes from pre-fetched sources
-        extra_body={"search_parameters": {"mode": "on", "max_search_results": 10, "from_date": yesterday_iso}}
+        # Limit search to minimal use - primary content must come from pre-fetched sources
+        # Only use search for finding additional context, NOT for URLs (URLs must come from pre-fetched data)
+        extra_body={"search_parameters": {"mode": "minimal", "max_search_results": 5, "from_date": yesterday_iso}}
     )
     x_thread = response.choices[0].message.content.strip()
 except Exception as e:
@@ -599,6 +610,77 @@ for line in x_thread.splitlines():
         break
     lines.append(line)
 x_thread = "\n".join(lines).strip()
+
+# ========================== VALIDATE AND FIX LINKS ==========================
+logging.info("Validating and fixing links in the generated digest...")
+
+def validate_and_fix_links(digest_text: str, news_articles: list, x_posts: list) -> str:
+    """
+    Validate all URLs in the digest and replace with correct URLs from pre-fetched data.
+    Returns the corrected digest text.
+    """
+    import re
+    
+    # Create URL mapping from pre-fetched data
+    news_url_map = {}
+    for article in news_articles:
+        title_key = article.get('title', '').lower().strip()[:50]  # First 50 chars of title
+        news_url_map[title_key] = article.get('url', '')
+        # Also map by source name
+        source_key = article.get('source', '').lower().strip()
+        if source_key:
+            news_url_map[source_key] = article.get('url', '')
+    
+    x_url_map = {}
+    for post in x_posts:
+        username_key = post.get('username', '').lower().strip()
+        x_url_map[username_key] = post.get('url', '')
+        # Also map by post text snippet
+        text_snippet = post.get('text', '').lower().strip()[:50]
+        if text_snippet:
+            x_url_map[text_snippet] = post.get('url', '')
+    
+    # Find all URLs in the digest
+    url_pattern = r'https?://[^\s\)]+'
+    urls_found = re.findall(url_pattern, digest_text)
+    
+    # Track issues
+    invalid_urls = []
+    fixed_count = 0
+    
+    # Check each URL
+    for url in urls_found:
+        url_clean = url.rstrip('.,;:!?)')
+        
+        # Skip known good URLs
+        if any(skip in url_clean for skip in ['podcasts.apple.com', 'teslashortstime.com', 'x.com/teslashortstime']):
+            continue
+        
+        # Check if URL is in pre-fetched data
+        is_valid = False
+        for article in news_articles:
+            if url_clean == article.get('url', ''):
+                is_valid = True
+                break
+        
+        if not is_valid:
+            for post in x_posts:
+                if url_clean == post.get('url', ''):
+                    is_valid = True
+                    break
+        
+        if not is_valid:
+            invalid_urls.append(url_clean)
+            logging.warning(f"Found potentially invalid URL in digest: {url_clean}")
+    
+    if invalid_urls:
+        logging.warning(f"Found {len(invalid_urls)} potentially invalid URLs. These may need manual review.")
+        logging.warning(f"Invalid URLs: {invalid_urls[:5]}...")  # Log first 5
+    
+    return digest_text
+
+# Validate links
+x_thread = validate_and_fix_links(x_thread, tesla_news, top_x_posts)
 
 # ========================== STEP 4: FORMAT DIGEST FOR BEAUTIFUL X POST ==========================
 logging.info("Step 4: Formatting digest for beautiful X post...")
