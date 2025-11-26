@@ -593,9 +593,9 @@ try:
         messages=[{"role": "user", "content": X_PROMPT}],
         temperature=0.7,
         max_tokens=4000,
-        # Limit search to minimal use - primary content must come from pre-fetched sources
-        # Only use search for finding additional context, NOT for URLs (URLs must come from pre-fetched data)
-        extra_body={"search_parameters": {"mode": "minimal", "max_search_results": 5, "from_date": yesterday_iso}}
+        # Disable web search - we want to use ONLY pre-fetched URLs to avoid hallucinations and dead links
+        # All content must come from the pre-fetched news articles and X posts
+        extra_body={"search_parameters": {"mode": "off"}}
     )
     x_thread = response.choices[0].message.content.strip()
 except Exception as e:
