@@ -1042,6 +1042,12 @@ def update_rss_feed(
             itunes_duration = item.find("itunes:duration")
             if itunes_duration is not None:
                 itunes_duration.text = format_duration(mp3_duration)
+            # Update season
+            itunes_season = item.find("itunes:season")
+            if itunes_season is not None:
+                itunes_season.text = "1"
+            else:
+                ET.SubElement(item, "itunes:season").text = "1"
             # Ensure existing episode has image tag
             existing_item_image = item.find("itunes:image")
             if existing_item_image is None:
@@ -1113,6 +1119,7 @@ def update_rss_feed(
     itunes_summary.text = episode_description
     ET.SubElement(item, "itunes:duration").text = format_duration(mp3_duration)
     ET.SubElement(item, "itunes:episode").text = str(episode_num)
+    ET.SubElement(item, "itunes:season").text = "1"  # Season 1
     ET.SubElement(item, "itunes:episodeType").text = "full"
     ET.SubElement(item, "itunes:explicit").text = "no"
     
@@ -1127,7 +1134,7 @@ def update_rss_feed(
     else:
         ET.SubElement(channel, "lastBuildDate").text = datetime.datetime.now(datetime.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
     
-    # Ensure all existing episodes have itunes:image (update if missing)
+    # Ensure all existing episodes have itunes:image and itunes:season (update if missing)
     all_items = channel.findall("item")
     for existing_item in all_items:
         existing_item_image = existing_item.find("itunes:image")
@@ -1135,6 +1142,14 @@ def update_rss_feed(
             item_image = ET.SubElement(existing_item, "itunes:image")
             item_image.set("href", f"{base_url}/podcast-image.jpg")
             logging.info(f"Added itunes:image to existing episode in RSS feed")
+        # Ensure season tag exists
+        existing_item_season = existing_item.find("itunes:season")
+        if existing_item_season is None:
+            ET.SubElement(existing_item, "itunes:season").text = "1"
+            logging.info(f"Added itunes:season to existing episode in RSS feed")
+        elif existing_item_season.text != "1":
+            existing_item_season.text = "1"
+            logging.info(f"Updated itunes:season to 1 for existing episode in RSS feed")
     
     # Sort items by pubDate (newest first)
     items = channel.findall("item")
