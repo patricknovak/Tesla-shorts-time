@@ -54,8 +54,8 @@ Cron format: `minute hour day month day-of-week`
 
 After each run:
 - Generated files are automatically committed to the repository
-- **Files are published to:** `digests/digests/` folder in your repository
-- Check the `digests/digests/` folder for:
+- **Files are published to:** `digests/` folder in your repository
+- Check the `digests/` folder for:
   - `Tesla_Shorts_Time_YYYYMMDD.md` - The X thread/digest
   - `Tesla_Shorts_Time_Pod_EpXXX_YYYYMMDD.mp3` - The podcast audio
   - `podcast_transcript_YYYYMMDD.txt` - The podcast script

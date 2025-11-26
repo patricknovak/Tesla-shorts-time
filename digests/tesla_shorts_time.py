@@ -15,11 +15,14 @@ import tempfile
 import html
 import json
 import xml.etree.ElementTree as ET
+from feedgen.feed import FeedGenerator
 from pathlib import Path
 from dotenv import load_dotenv
 import yfinance as yf
 from openai import OpenAI
 from difflib import SequenceMatcher
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from bs4 import BeautifulSoup
 
 # ========================== LOGGING ==========================
 logging.basicConfig(
@@ -126,7 +129,7 @@ change_str = f"{change:+.2f} ({change_pct:+.2f}%) {market_status}" if change != 
 episode_num = (datetime.date.today() - datetime.date(2025, 1, 1)).days + 1
 
 # Folders - use absolute paths
-digests_dir = script_dir / "digests"
+digests_dir = project_root / "digests"
 digests_dir.mkdir(exist_ok=True)
 tmp_dir = Path(tempfile.gettempdir()) / "tts"
 tmp_dir.mkdir(exist_ok=True, parents=True)
@@ -141,6 +144,141 @@ client = OpenAI(
 ELEVEN_API = "https://api.elevenlabs.io/v1"
 ELEVEN_KEY = os.getenv("ELEVENLABS_API_KEY")
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
+
+# ========================== SHORT INTEREST SCRAPER ==========================
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((requests.RequestException, requests.Timeout))
+)
+def get_short_interest():
+    """Fetch Tesla short interest data from fintel.io with BeautifulSoup parsing"""
+    import re
+    
+    # Fallback hardcoded values (updated periodically)
+    FALLBACK_SHORT_INTEREST_PCT = 3.2  # Approximate recent TSLA short interest %
+    FALLBACK_SHORT_INTEREST_VALUE = 50.2  # Approximate in billions
+    
+    try:
+        url = "https://fintel.io/ss/us/tsla"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        short_interest_pct = None
+        short_interest_value = None
+        
+        # Strategy 1: Look for tables with short interest data
+        tables = soup.find_all('table')
+        for table in tables:
+            rows = table.find_all('tr')
+            for row in rows:
+                cells = row.find_all(['td', 'th'])
+                text = ' '.join([cell.get_text(strip=True) for cell in cells]).lower()
+                if 'short interest' in text or 'shares short' in text:
+                    # Look for percentage in this row or next row
+                    row_text = row.get_text()
+                    # Try to find percentage pattern (e.g., "3.2%", "3.2 %")
+                    pct_match = re.search(r'(\d+\.?\d*)\s*%', row_text)
+                    if pct_match:
+                        try:
+                            short_interest_pct = float(pct_match.group(1))
+                        except ValueError:
+                            pass
+                    
+                    # Try to find dollar value (e.g., "$50.2B", "50.2 billion")
+                    value_match = re.search(r'\$?(\d+\.?\d*)\s*[Bb]', row_text)
+                    if value_match:
+                        try:
+                            short_interest_value = float(value_match.group(1))
+                        except ValueError:
+                            pass
+        
+        # Strategy 2: Look for divs/spans with short interest keywords
+        if short_interest_pct is None or short_interest_value is None:
+            for element in soup.find_all(['div', 'span', 'p']):
+                text = element.get_text(strip=True).lower()
+                if 'short interest' in text or 'shares short' in text:
+                    full_text = element.get_text()
+                    # Extract percentage
+                    if short_interest_pct is None:
+                        pct_match = re.search(r'(\d+\.?\d*)\s*%', full_text)
+                        if pct_match:
+                            try:
+                                short_interest_pct = float(pct_match.group(1))
+                            except ValueError:
+                                pass
+                    # Extract dollar value
+                    if short_interest_value is None:
+                        value_match = re.search(r'\$?(\d+\.?\d*)\s*[Bb]', full_text)
+                        if value_match:
+                            try:
+                                short_interest_value = float(value_match.group(1))
+                            except ValueError:
+                                pass
+        
+        # Strategy 3: Search entire page text for patterns
+        if short_interest_pct is None or short_interest_value is None:
+            page_text = soup.get_text()
+            # Look for patterns like "Short Interest: 3.2%" or "3.2% of float"
+            if short_interest_pct is None:
+                pct_patterns = [
+                    r'short\s+interest[:\s]+(\d+\.?\d*)\s*%',
+                    r'(\d+\.?\d*)\s*%\s+of\s+(float|shares)',
+                    r'(\d+\.?\d*)\s*%\s+short'
+                ]
+                for pattern in pct_patterns:
+                    match = re.search(pattern, page_text, re.IGNORECASE)
+                    if match:
+                        try:
+                            short_interest_pct = float(match.group(1))
+                            break
+                        except (ValueError, IndexError):
+                            continue
+            
+            if short_interest_value is None:
+                value_patterns = [
+                    r'\$(\d+\.?\d*)\s*[Bb]illion.*short',
+                    r'short.*\$(\d+\.?\d*)\s*[Bb]illion'
+                ]
+                for pattern in value_patterns:
+                    match = re.search(pattern, page_text, re.IGNORECASE)
+                    if match:
+                        try:
+                            short_interest_value = float(match.group(1))
+                            break
+                        except (ValueError, IndexError):
+                            continue
+        
+        # Use fallback if parsing failed
+        if short_interest_pct is None:
+            short_interest_pct = FALLBACK_SHORT_INTEREST_PCT
+            logging.info(f"Using fallback short interest percentage: {short_interest_pct}%")
+        else:
+            logging.info(f"Parsed short interest percentage: {short_interest_pct}%")
+        
+        if short_interest_value is None:
+            short_interest_value = FALLBACK_SHORT_INTEREST_VALUE
+            logging.info(f"Using fallback short interest value: ${short_interest_value}B")
+        else:
+            logging.info(f"Parsed short interest value: ${short_interest_value}B")
+        
+        return {
+            "short_interest_pct": short_interest_pct,
+            "short_interest_value": short_interest_value,
+            "source": "fintel.io" if short_interest_pct != FALLBACK_SHORT_INTEREST_PCT else "fallback"
+        }
+    except Exception as e:
+        logging.warning(f"Could not fetch short interest data from fintel.io: {e}")
+        logging.info("Using fallback short interest values")
+        return {
+            "short_interest_pct": FALLBACK_SHORT_INTEREST_PCT,
+            "short_interest_value": FALLBACK_SHORT_INTEREST_VALUE,
+            "source": "fallback"
+        }
 
 # ========================== STEP 1: FETCH TESLA NEWS FROM NEWSAPI.ORG ==========================
 logging.info("Step 1: Fetching Tesla news from newsapi.org for the last 24 hours...")
@@ -197,6 +335,11 @@ def remove_similar_items(items, similarity_threshold=0.7, get_text_func=None):
     
     return filtered
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((requests.RequestException, requests.Timeout))
+)
 def fetch_tesla_news():
     """Fetch Tesla-related news from newsapi.org for the last 24 hours.
     Returns tuple: (filtered_articles, raw_articles) for saving raw data."""
@@ -213,6 +356,7 @@ def fetch_tesla_news():
         "sortBy": "publishedAt",
         "language": "en",
         "pageSize": 50,  # Get up to 50 articles
+        "domains": "electrek.co,teslarati.com,notateslaapp.com,reuters.com,bloomberg.com,cnbc.com,insideevs.com,theverge.com",
         "apiKey": NEWSAPI_KEY
     }
     
@@ -511,6 +655,11 @@ def fetch_top_x_posts():
         return [], []
 
 top_x_posts, raw_x_posts = fetch_top_x_posts()
+
+# CRITICAL: Fail if we don't have enough X posts (minimum 8 required)
+if len(top_x_posts) < 8:
+    logging.critical(f"❌ CRITICAL ERROR: Only {len(top_x_posts)} X posts were fetched. Minimum 8 required. Exiting.")
+    sys.exit(1)
 
 # ========================== SAVE RAW DATA AND GENERATE HTML PAGE ==========================
 logging.info("Saving raw data and generating HTML page for raw news and X posts...")
@@ -853,18 +1002,26 @@ if top_x_posts:
     # Include all available posts (up to 20) to give Grok more options
     num_posts_to_include = min(len(top_x_posts), 20)
     x_posts_section = f"## PRE-FETCHED X POSTS (from X API - last 24 hours, ranked by engagement):\n\n"
-    x_posts_section += f"**IMPORTANT: You have {len(top_x_posts)} pre-fetched X posts available. You MUST select exactly 10 of these for your output.**\n\n"
+    x_posts_section += f"**IMPORTANT: You have {len(top_x_posts)} pre-fetched X posts available. Select UP TO 10 from these pre-fetched posts. If you have fewer than 10, output only what exists. NEVER invent, make up, or hallucinate X post URLs - only use the exact URLs provided below. If you cannot find enough posts, output fewer items rather than inventing URLs.**\n\n"
     for i, post in enumerate(top_x_posts[:num_posts_to_include], 1):  # Include up to 20 posts
         x_posts_section += f"{i}. **@{post['username']} ({post['name']})**\n"
         x_posts_section += f"   Engagement Score: {post['engagement']:.0f} (Likes: {post['likes']}, RTs: {post['retweets']}, Replies: {post['replies']})\n"
         x_posts_section += f"   Posted: {post['created_at']}\n"
         x_posts_section += f"   Text: {post['text'][:300]}...\n"
         x_posts_section += f"   URL: {post['url']}\n\n"
-    if len(top_x_posts) < 10:
-        x_posts_section += f"\n**WARNING: Only {len(top_x_posts)} X posts were fetched. You MUST use web search to find additional X posts to reach exactly 10 total posts in your output.**\n\n"
 else:
+    # This should never happen due to the check above, but handle gracefully
     x_posts_section = "## PRE-FETCHED X POSTS: None available\n\n"
-    x_posts_section += "**CRITICAL: No X posts were pre-fetched from X API (authentication may have failed). You MUST use web search and X search tools to find exactly 10 REAL X posts from the last 24 hours for your output. Search for recent Tesla-related posts on X (Twitter) and include the EXACT X post URLs (format: https://x.com/username/status/ID). DO NOT invent, make up, or hallucinate any URLs - all URLs will be validated and invalid ones will be removed. Only include URLs you can verify through web search are real and accessible.**\n\n"
+
+# Fetch short interest data for Short Squeeze section
+logging.info("Fetching short interest data...")
+short_interest_data = get_short_interest()
+short_interest_section = ""
+if short_interest_data:
+    short_interest_section = f"\n## SHORT INTEREST DATA (for Short Squeeze section):\n"
+    short_interest_section += f"Current short interest: {short_interest_data['short_interest_pct']}% of float\n"
+    short_interest_section += f"Short interest value: ${short_interest_data['short_interest_value']}B\n"
+    short_interest_section += f"Source: {short_interest_data['source']}\n"
 
 X_PROMPT = f"""
 # Tesla Shorts Time - DAILY EDITION
@@ -875,11 +1032,14 @@ X_PROMPT = f"""
 
 {x_posts_section}  // Pre-fetched X posts: List of 10+ with exact URLs[](https://x.com/username/status/ID), authors, timestamps, content.
 
-You are an elite Tesla news curator producing the daily "Tesla Shorts Time" newsletter. Use ONLY the pre-fetched news and X posts above. Do NOT hallucinate, invent, or search for new content/URLs—stick to exact provided links. If pre-fetched items < required counts, output fewer items (e.g., if only 3 X posts, number them 1-3). Prioritize diversity: No duplicates/similar stories (≥70% overlap in angle/content); max 3 from one source/account.
+{short_interest_section}  // Current short interest data for Short Squeeze section
+
+You are an elite Tesla news curator producing the daily "Tesla Shorts Time" newsletter. Use ONLY the pre-fetched news and X posts above. Do NOT hallucinate, invent, or search for new content/URLs—stick to exact provided links. NEVER invent X post URLs - if you don't have enough pre-fetched posts, output fewer items (e.g., if only 8 X posts, number them 1-8). If you have zero pre-fetched X posts, completely remove the "Top X Posts" section from your output. Prioritize diversity: No duplicates/similar stories (≥70% overlap in angle/content); max 3 from one source/account.
 
 ### MANDATORY SELECTION & COUNTS
 - **News**: Select EXACTLY 5 unique articles (if <5 available, use all). Prioritize high-quality sources; each must cover a DIFFERENT Tesla story/angle.
-- **X Posts**: Select EXACTLY 10 unique posts (if <10 available, use all). Each must cover a DIFFERENT angle; max 3 per username (up to 4 if needed to hit 10).
+- **X Posts**: Select UP TO 10 unique posts from pre-fetched list. If fewer than 10 are available, output only what exists. NEVER invent, make up, or hallucinate X post URLs - only use exact URLs from the pre-fetched list. If you cannot find enough posts, output fewer items (e.g., if only 8 posts, number them 1-8). Each must cover a DIFFERENT angle; max 3 per username.
+- **CRITICAL URL RULE**: NEVER invent X post URLs. If you don't have enough pre-fetched posts, output fewer items rather than making up URLs. All URLs must be exact matches from the pre-fetched list above.
 - **Diversity Check**: Before finalizing, verify no similar content; replace if needed from pre-fetched pool.
 
 ### FORMATTING (EXACT—USE MARKDOWN AS SHOWN)
@@ -895,10 +1055,10 @@ You are an elite Tesla news curator producing the daily "Tesla Shorts Time" news
 2. [Repeat format for 3-5; if <5 items, stop at available count]
 
 ━━━━━━━━━━━━━━━━━━━━
-### Top 10 X Posts
+### Top X Posts
 1. **Catchy Title: DD Month, YYYY, HH:MM AM/PM PST**  
    2–4 sentences: Explain post & significance (pro-Tesla angle). End with: Post: [EXACT URL FROM PRE-FETCHED—https://x.com/username/status/ID]
-2. [Repeat for 2-10; if <10, stop at available count]
+2. [Repeat for remaining posts; use only pre-fetched posts, never invent URLs. If fewer than 10 available, output only what exists (e.g., if 8 posts, number 1-8)]
 
 ━━━━━━━━━━━━━━━━━━━━
 ## Short Spot
@@ -908,7 +1068,7 @@ One bearish item from pre-fetched (news or X post) that's negative for Tesla/sto
 
 ━━━━━━━━━━━━━━━━━━━━
 ### Short Squeeze
-Dedicated paragraph on short-seller pain: Include current short interest %/$ value (use known data, e.g., from Ortex/S3; cite if possible). Add 2 specific failed bear predictions (2023–2025, with refs/links—vary from past). End with YTD/recent squeeze $ losses.
+Dedicated paragraph on short-seller pain: Include current short interest %/$ value from the data provided above (use the exact values from the SHORT INTEREST DATA section). Add 2 specific failed bear predictions (2023–2025, with refs/links—vary from past). End with YTD/recent squeeze $ losses.
 
 ━━━━━━━━━━━━━━━━━━━━
 ### Daily Challenge
@@ -943,25 +1103,38 @@ Output today's edition exactly as formatted.
 
 logging.info("Generating X thread with Grok using pre-fetched content (this may take 1-2 minutes)...")
 
-# Enable web search if we have no pre-fetched X posts (X API failed)
-# Otherwise, disable it to use only pre-fetched URLs and avoid hallucinations
-enable_web_search = len(top_x_posts) == 0
-if enable_web_search:
-    logging.warning("⚠️  No X posts were pre-fetched - enabling Grok web search to find X posts")
-    search_params = {"mode": "on", "max_search_results": 10, "from_date": yesterday_iso}
-else:
-    logging.info("✅ Using only pre-fetched X posts - web search disabled to avoid hallucinations")
-    search_params = {"mode": "off"}
+# CRITICAL: Always disable web search to prevent hallucinations and ensure we only use pre-fetched URLs
+enable_web_search = False
+search_params = {"mode": "off"}
+logging.info("✅ Web search disabled - using only pre-fetched content to avoid hallucinations")
 
-try:
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=30),
+    retry=retry_if_exception_type((Exception,))
+)
+def generate_digest_with_grok():
+    """Generate digest with retry logic"""
     response = client.chat.completions.create(
-        model="grok-4-1-fast-reasoning",
+        model="grok-4",
         messages=[{"role": "user", "content": X_PROMPT}],
         temperature=0.7,
         max_tokens=4000,
         extra_body={"search_parameters": search_params}
     )
+    return response
+
+try:
+    response = generate_digest_with_grok()
     x_thread = response.choices[0].message.content.strip()
+    
+    # Log token usage and cost
+    if hasattr(response, 'usage') and response.usage:
+        usage = response.usage
+        logging.info(f"Grok API - Tokens used: {usage.total_tokens} (prompt: {usage.prompt_tokens}, completion: {usage.completion_tokens})")
+        # Estimate cost (Grok pricing may vary, using approximate $0.01 per 1M tokens)
+        estimated_cost = (usage.total_tokens / 1000000) * 0.01
+        logging.info(f"Estimated cost: ${estimated_cost:.4f}")
 except Exception as e:
     logging.error(f"Grok API call failed: {e}")
     logging.error("This might be due to network issues or API timeout. Please try again.")
@@ -1037,12 +1210,12 @@ def validate_x_post_url(url: str) -> bool:
 def validate_and_fix_links(digest_text: str, news_articles: list, x_posts: list) -> str:
     """
     Validate all URLs in the digest and remove invalid ones.
-    When X posts are from web search (0 pre-fetched), validate X post URLs by format.
+    CRITICAL: Only accepts URLs from pre-fetched data. All other URLs are removed.
     Returns the corrected digest text with invalid URLs removed.
     """
     import re
     
-    # Track if we have pre-fetched X posts
+    # We always require pre-fetched X posts (minimum 8), so this should always be True
     has_prefetched_x_posts = len(x_posts) > 0
     
     # Create URL mapping from pre-fetched data
@@ -1097,28 +1270,21 @@ def validate_and_fix_links(digest_text: str, news_articles: list, x_posts: list)
                 is_valid = True
                 break
         
-        # Check X posts if we have pre-fetched ones
-        if not is_valid and has_prefetched_x_posts:
+        # Check X posts - we always require pre-fetched ones (minimum 8)
+        if not is_valid:
             for post in x_posts:
                 if url_clean == post.get('url', ''):
                     is_valid = True
                     break
         
-        # If no pre-fetched X posts, be VERY strict - only accept URLs that pass format validation
-        # But we'll still be conservative since we can't verify they're real
-        if not is_valid and not has_prefetched_x_posts:
-            # Check if it's an X post URL
+        # CRITICAL: Only accept URLs from pre-fetched data. Reject everything else.
+        # Since we always require at least 8 pre-fetched X posts, we should never reach here
+        # for X post URLs, but if we do, reject them.
+        if not is_valid:
             if 'x.com' in url_clean or 'twitter.com' in url_clean:
-                if validate_x_post_url(url_clean):
-                    # Format is valid, but we can't verify it's real
-                    # Accept it but log a warning
-                    is_valid = True
-                    logging.warning(f"⚠️  Accepted X post URL from web search (format valid, but unverified): {url_clean}")
-                else:
-                    logging.warning(f"❌ Invalid X post URL format: {url_clean}")
+                logging.warning(f"❌ X post URL not found in pre-fetched data - removing: {url_clean}")
             else:
-                # Not an X post URL, but also not in pre-fetched news - mark as invalid
-                logging.warning(f"❌ URL not found in pre-fetched data and not a valid X post URL: {url_clean}")
+                logging.warning(f"❌ URL not found in pre-fetched data - removing: {url_clean}")
         
         # If still not valid, mark for removal
         if not is_valid:
@@ -1407,67 +1573,64 @@ if not ENABLE_PODCAST:
     logging.info("Podcast generation is disabled (ENABLE_PODCAST = False). Skipping podcast script generation, audio processing, and RSS feed updates.")
     final_mp3 = None
 else:
-    POD_PROMPT = f"""
+    # Simplified podcast prompt - use only the final formatted digest
+    POD_PROMPT = f"""You are writing an 8–11 minute (1950–2600 words) solo podcast script for "Tesla Shorts Time Daily" Episode {episode_num}.
 
-You are now writing an 8–11 minute (1950–2600 words, ~145–155 wpm) solo podcast script for “Tesla Shorts Time Daily” Episode {episode_num}.
-### HOST PERSONA (NON-NEGOTIABLE)
-- Host = Patrick in Vancouver
-- Voice: Canadian, hyper-enthusiastic scientist, newscaster and truth seeker.  Voice is like a solo YouTuber breaking Tesla news and not robotic.
-- Zero fluff, zero filler words, 100% fact-obsessed
-- Every single sentence must be backed by something that actually appears in today’s Tesla Shorts Time Daily markdown digest you will be provided
-- Keep accent and tone consistent throughout the script.
-- Vary sentence length dramatically — short punchy ones mixed with longer hyped run-ons.
-- Clearly ennunciate all dates,numbers, dollar amounts, percentages, and stats.
-### INPUT
-You will receive the complete, final Tesla Shorts Time Daily markdown for {today_str}. Use ONLY information from that digest — nothing else, no external knowledge, no improvisation.
-### EXACT SCRIPT STRUCTURE & RULES
-- Start every spoken line with “Patrick:” (no exceptions)
-- Do NOT read URLs aloud — only mention source names naturally (e.g. “Sawyer just dropped this on X”, “Electrek is reporting”)
-- Never say the exact timestamp — only the natural date or “today”, “this morning”, “late last night”
-- Ennunciate all numbers, dollar amounts, percentages, and stats slowly and clearly the way a hyped Canadian scientist would
-- When you get to the Short Squeeze section — name names, dollar losses, and celebrate how wrong they were
-- Quote the inspirational quote and Daily Challenge verbatim
-### MANDATORY SCRIPT OUTLINE (follow exactly)
-[Intro music fades in for exactly 10 seconds — no text here]
-Patrick: Welcome to Tesla Shorts Time Daily, episode {episode_num}
-It is (say today's date in the format of November 21, 2025).
-I’m Patrick in Vancouver, Canada. TSLA stock price is ${price:.2f} right now (enunciate the price clearly).
-Thank you for joining us today. If you like the show, please like, share, rate and subscribe to the podcast, it really helps.
-Now straight to the daily news updates you are here for.
-[Now narrate EVERY SINGLE ITEM from the digest in published order — no skipping]
-→ For each of the 6 Top News Items:
-   Patrick: [Read the bold title with excitement] → then paraphrase the 2–4 sentence summary in natural, rapid, hyped speech, hitting every key fact and why it matters
-→ For the 10 X posts:
-   Patrick: Over to the top X posts, read naturally each post — [read the catchy title with maximum hype and then paraphrase the post in excited spoken language while keeping every fact 100% accurate]
-→ Short Squeeze section:
-   Patrick: And now, it’s time for everyone’s favourite segment — the Short Squeeze! [paraphrase the entire paragraph with glee, calling out specific failed predictions, dollar losses, and laughing at how wrong the bears were]
-→ Daily Challenge + Quote:
-   Patrick: Today’s inspirational quote comes straight from the digest: “[exact quote]” — [author].
-   Patrick: And your Daily Challenge today is exactly this: [read the Daily Challenge verbatim and then add one extra hyped encouraging sentence of your own]
-### EXACT CLOSING (word-for-word — do not change)
-Patrick: That’s Tesla Shorts Time Daily for today. I look forward to hearing your thoughts and ideas — reach out to us @teslashortstime on X or DM us directly. Stay safe, keep accelerating, and remember: the future is electric! Your efforts help accelerate the world’s transition to sustainable energy… and beyond. We’ll catch you tomorrow on Tesla Shorts Time Daily!
-### TONE REMINDERS
-- Sound like you’re personally watching humanity’s future unfold in real time
-- Keep accent and tone consistent throughout the script.
-- non robotic like reading the news and not a script.
-- Speak clearly and concisely like a newscaster.
-- Sound as naturally as possible for all sentences.
-- Vary sentence length dramatically — short punchy ones mixed with longer hyped run-ons.
-- Newscaster like reading of the news and X posts.
-Now, here is today’s complete Tesla Shorts Time Daily markdown digest. Using ONLY that content, write the full script exactly as specified above.
+HOST: Patrick in Vancouver - Canadian, hyper-enthusiastic scientist, newscaster. Voice like a solo YouTuber breaking Tesla news, not robotic.
+
+RULES:
+- Start every line with "Patrick:"
+- Don't read URLs aloud - mention source names naturally
+- Use natural dates ("today", "this morning") not exact timestamps
+- Enunciate all numbers, dollar amounts, percentages clearly
+- Use ONLY information from the digest below - nothing else
+
+SCRIPT STRUCTURE:
+[Intro music - 10 seconds]
+Patrick: Welcome to Tesla Shorts Time Daily, episode {episode_num}. It is {today_str}. I'm Patrick in Vancouver, Canada. TSLA stock price is ${price:.2f} right now. Thank you for joining us today. If you like the show, please like, share, rate and subscribe to the podcast, it really helps. Now straight to the daily news updates you are here for.
+
+[Narrate EVERY item from the digest in order - no skipping]
+- For each news item: Read the title with excitement, then paraphrase the summary naturally
+- For each X post: Read the title with maximum hype, then paraphrase the post in excited speech
+- Short Squeeze: Paraphrase with glee, calling out specific failed predictions and dollar losses
+- Daily Challenge + Quote: Read the quote verbatim, then the challenge verbatim, add one encouraging sentence
+
+[Closing]
+Patrick: That's Tesla Shorts Time Daily for today. I look forward to hearing your thoughts and ideas — reach out to us @teslashortstime on X or DM us directly. Stay safe, keep accelerating, and remember: the future is electric! Your efforts help accelerate the world's transition to sustainable energy… and beyond. We'll catch you tomorrow on Tesla Shorts Time Daily!
+
+Here is today's complete formatted digest. Use ONLY this content:
 """
 
-    logging.info("Generating podcast script with Grok (this may take 1-2 minutes)...")
-    try:
-        podcast_script = client.chat.completions.create(
-            model="grok-4-1-fast-reasoning",
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=30),
+        retry=retry_if_exception_type((Exception,))
+    )
+    def generate_podcast_script_with_grok():
+        """Generate podcast script with retry logic"""
+        return client.chat.completions.create(
+            model="grok-4",
             messages=[
                 {"role": "system", "content": "You are the world's best Tesla podcast writer. Make it feel like two real Canadian friends losing their minds (in a good way) over real Tesla news."},
-                {"role": "user", "content": f"Here is today's exact X thread/digest (use ONLY these facts):\n\n{x_thread}\n\n{POD_PROMPT}"}
+                {"role": "user", "content": f"{POD_PROMPT}\n\n{x_thread}"}
             ],
             temperature=0.9,  # higher = more natural energy
             max_tokens=4000
-        ).choices[0].message.content.strip()
+        )
+    
+    logging.info("Generating podcast script with Grok (this may take 1-2 minutes)...")
+    try:
+        # Use only the final formatted digest - much simpler and more reliable
+        podcast_response = generate_podcast_script_with_grok()
+        podcast_script = podcast_response.choices[0].message.content.strip()
+        
+        # Log token usage if available
+        if hasattr(podcast_response, 'usage') and podcast_response.usage:
+            usage = podcast_response.usage
+            logging.info(f"Podcast script generation - Tokens used: {usage.total_tokens} (prompt: {usage.prompt_tokens}, completion: {usage.completion_tokens})")
+            # Estimate cost (Grok pricing may vary, using approximate)
+            estimated_cost = (usage.total_tokens / 1000000) * 0.01  # Rough estimate
+            logging.info(f"Estimated cost: ${estimated_cost:.4f}")
     except Exception as e:
         logging.error(f"Grok API call for podcast script failed: {e}")
         logging.error("This might be due to network issues or API timeout. Please try again.")
@@ -1482,6 +1645,11 @@ Now, here is today’s complete Tesla Shorts Time Daily markdown digest. Using O
     # ========================== 3. ELEVENLABS TTS + COLLECT AUDIO FILES ==========================
     PATRICK_VOICE_ID = "dTrBzPvD2GpAqkk1MUzA"    # High-energy Patrick
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((requests.RequestException, requests.Timeout))
+    )
     def speak(text: str, voice_id: str, filename: str):
         url = f"{ELEVEN_API}/text-to-speech/{voice_id}/stream"
         headers = {"xi-api-key": ELEVEN_KEY}
@@ -1547,289 +1715,77 @@ def update_rss_feed(
     mp3_path: Path,
     base_url: str = "https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main"
 ):
-    """
-    Update or create RSS feed with new episode.
+    """Update or create RSS feed with new episode using feedgen (clean, no namespace hell)."""
+    fg = FeedGenerator()
+    fg.load_extension('podcast')
     
-    Args:
-        rss_path: Path to RSS feed XML file
-        episode_num: Episode number
-        episode_title: Episode title
-        episode_description: Episode description
-        episode_date: Publication date
-        mp3_filename: Filename of MP3 (relative to digests/digests/)
-        mp3_duration: Duration in seconds
-        base_url: Base URL for serving files
-    """
-    # Register namespace to preserve 'itunes' prefix (not ns0)
-    ET.register_namespace("itunes", "http://www.itunes.com/dtds/podcast-1.0.dtd")
-    ET.register_namespace("content", "http://purl.org/rss/1.0/modules/content/")
-    
-    # RSS namespace
-    ns = {"itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd"}
-    
-    # Parse existing RSS or create new
+    # Load existing feed if it exists
     if rss_path.exists():
         try:
-            # Read and fix namespace issues before parsing
-            with open(rss_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            # Fix any existing namespace issues
-            content = content.replace('xmlns:ns0=', 'xmlns:itunes=')
-            content = content.replace('xmlns:ns1=', 'xmlns:content=')
-            content = content.replace('<ns0:', '<itunes:')
-            content = content.replace('</ns0:', '</itunes:')
-            content = content.replace('<ns1:', '<content:')
-            content = content.replace('</ns1:', '</content:')
-            
-            # Parse from string
-            root = ET.fromstring(content.encode('utf-8'))
-            channel = root.find("channel")
-            if channel is None:
-                raise ValueError("Channel element not found in RSS feed")
+            fg.rss_file(str(rss_path))
         except Exception as e:
-            logging.warning(f"Could not parse existing RSS feed: {e}, creating new one")
-            root = None
-            channel = None
-    else:
-        root = None
-        channel = None
+            logging.warning(f"Could not load existing RSS feed: {e}, creating new one")
+            fg = FeedGenerator()
+            fg.load_extension('podcast')
     
-    # Create new RSS feed if needed
-    if root is None:
-        root = ET.Element("rss", version="2.0")
-        root.set("xmlns:itunes", "http://www.itunes.com/dtds/podcast-1.0.dtd")
-        root.set("xmlns:content", "http://purl.org/rss/1.0/modules/content/")
-        channel = ET.SubElement(root, "channel")
-        
-        # Channel metadata
-        ET.SubElement(channel, "title").text = "Tesla Shorts Time Daily"
-        ET.SubElement(channel, "link").text = "https://github.com/patricknovak/Tesla-shorts-time"
-        ET.SubElement(channel, "description").text = "Daily Tesla news digest and podcast hosted by Patrick in Vancouver. Covering the latest Tesla developments, stock updates, and short squeeze celebrations."
-        ET.SubElement(channel, "language").text = "en-us"
-        ET.SubElement(channel, "copyright").text = f"Copyright {datetime.date.today().year}"
-        ET.SubElement(channel, "lastBuildDate").text = datetime.datetime.now(datetime.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
-        
-        # iTunes metadata
-        itunes_author = ET.SubElement(channel, "itunes:author")
-        itunes_author.text = "Patrick"
-        itunes_summary = ET.SubElement(channel, "itunes:summary")
-        itunes_summary.text = "Daily Tesla news digest and podcast covering the latest developments, stock updates, and short squeeze celebrations."
-        itunes_owner = ET.SubElement(channel, "itunes:owner")
-        ET.SubElement(itunes_owner, "itunes:name").text = "Patrick"
-        ET.SubElement(itunes_owner, "itunes:email").text = "contact@teslashortstime.com"
-        itunes_image = ET.SubElement(channel, "itunes:image")
-        itunes_image.set("href", f"{base_url}/podcast-image.jpg")
-        itunes_cat = ET.SubElement(channel, "itunes:category")
-        itunes_cat.set("text", "Technology")
-        ET.SubElement(channel, "itunes:explicit").text = "no"
+    # Set channel metadata (only if new feed)
+    if not fg.title():
+        fg.title("Tesla Shorts Time Daily")
+        fg.link(href="https://github.com/patricknovak/Tesla-shorts-time")
+        fg.description("Daily Tesla news digest and podcast hosted by Patrick in Vancouver. Covering the latest Tesla developments, stock updates, and short squeeze celebrations.")
+        fg.language("en-us")
+        fg.copyright(f"Copyright {datetime.date.today().year}")
+        fg.podcast.itunes_author("Patrick")
+        fg.podcast.itunes_summary("Daily Tesla news digest and podcast covering the latest developments, stock updates, and short squeeze celebrations.")
+        fg.podcast.itunes_owner(name="Patrick", email="contact@teslashortstime.com")
+        fg.podcast.itunes_image(f"{base_url}/podcast-image.jpg")
+        fg.podcast.itunes_category("Technology")
+        fg.podcast.itunes_explicit("no")
     
-    # Ensure channel-level image is always present (even if RSS feed already existed)
-    existing_image = channel.find("itunes:image")
-    if existing_image is None:
-        itunes_image = ET.SubElement(channel, "itunes:image")
-        itunes_image.set("href", f"{base_url}/podcast-image.jpg")
-        logging.info(f"Added channel-level itunes:image to RSS feed")
-    else:
-        # Update the href to ensure it's correct
-        existing_image.set("href", f"{base_url}/podcast-image.jpg")
-        logging.info(f"Updated channel-level itunes:image in RSS feed")
-    
-    # Check if episode already exists (by GUID)
+    # Check if episode already exists
     episode_guid = f"tesla-shorts-time-ep{episode_num:03d}-{episode_date:%Y%m%d}"
-    existing_items = channel.findall("item")
-    episode_exists = False
-    for item in existing_items:
-        guid_elem = item.find("guid")
-        if guid_elem is not None and guid_elem.text == episode_guid:
-            logging.info(f"Episode {episode_num} already in RSS feed, updating existing entry")
-            episode_exists = True
-            # Update existing episode with latest information
-            # Update title
-            title_elem = item.find("title")
-            if title_elem is not None:
-                title_elem.text = episode_title
-            # Update description
-            desc_elem = item.find("description")
-            if desc_elem is not None:
-                desc_elem.text = html.escape(episode_description)
-            # Update enclosure URL and size
-            enclosure = item.find("enclosure")
-            if enclosure is not None:
-                mp3_url = f"{base_url}/digests/digests/{mp3_filename}"
-                enclosure.set("url", mp3_url)
-                mp3_size = mp3_path.stat().st_size if mp3_path.exists() else 0
-                enclosure.set("length", str(mp3_size))
-            # Update itunes:title
-            itunes_title = item.find("itunes:title")
-            if itunes_title is not None:
-                itunes_title.text = episode_title
-            # Update itunes:summary
-            itunes_summary = item.find("itunes:summary")
-            if itunes_summary is not None:
-                itunes_summary.text = episode_description
-            # Update duration
-            itunes_duration = item.find("itunes:duration")
-            if itunes_duration is not None:
-                itunes_duration.text = format_duration(mp3_duration)
-            # Update season
-            itunes_season = item.find("itunes:season")
-            if itunes_season is not None:
-                itunes_season.text = "1"
-            else:
-                ET.SubElement(item, "itunes:season").text = "1"
-            # Ensure existing episode has image tag
-            existing_item_image = item.find("itunes:image")
-            if existing_item_image is None:
-                item_image = ET.SubElement(item, "itunes:image")
-                item_image.set("href", f"{base_url}/podcast-image.jpg")
-                logging.info(f"Added itunes:image to existing episode {episode_num}")
-            # Update lastBuildDate even if episode exists
-            last_build_elem = channel.find("lastBuildDate")
-            if last_build_elem is not None:
-                last_build_elem.text = datetime.datetime.now(datetime.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
-            # Write the updated RSS feed
-            try:
-                tree = ET.ElementTree(root)
-                ET.indent(tree, space="  ")
-                with open(rss_path, "wb") as f:
-                    f.write('<?xml version="1.0" encoding="UTF-8"?>\n'.encode('utf-8'))
-                    tree.write(f, encoding="utf-8", xml_declaration=False)
-                # Post-process to fix namespace prefixes
-                with open(rss_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                content = content.replace('xmlns:ns0="http://www.itunes.com/dtds/podcast-1.0.dtd"', 'xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"')
-                content = content.replace('xmlns:ns1="http://purl.org/rss/1.0/modules/content/"', 'xmlns:content="http://purl.org/rss/1.0/modules/content/"')
-                content = content.replace('<ns0:', '<itunes:')
-                content = content.replace('</ns0:', '</itunes:')
-                content = content.replace('<ns1:', '<content:')
-                content = content.replace('</ns1:', '</content:')
-                with open(rss_path, "w", encoding="utf-8") as f:
-                    f.write(content)
-                logging.info(f"RSS feed updated (existing episode) → {rss_path}")
-                logging.info(f"RSS feed contains {len(channel.findall('item'))} episode(s)")
-                # Force file modification time update to ensure git detects the change
-                import os
-                os.utime(rss_path, None)
-                logging.info(f"RSS feed file timestamp updated to ensure git detects changes")
-            except Exception as e:
-                logging.error(f"Failed to write RSS feed to {rss_path}: {e}", exc_info=True)
-                raise
-            return
+    existing_entry = None
+    for entry in fg.entry():
+        if entry.id() == episode_guid:
+            existing_entry = entry
+            break
     
-    if episode_exists:
-        return
+    # Create or update episode
+    if existing_entry:
+        entry = existing_entry
+        logging.info(f"Updating existing episode {episode_num} in RSS feed")
+    else:
+        entry = fg.add_entry()
+        entry.id(episode_guid)
     
-    # Create new episode item
-    item = ET.SubElement(channel, "item")
-    ET.SubElement(item, "title").text = episode_title
-    ET.SubElement(item, "link").text = f"{base_url}/digests/digests/{mp3_filename}"
+    # Set episode data
+    entry.title(episode_title)
+    entry.description(episode_description)
+    entry.link(href=f"{base_url}/digests/{mp3_filename}")
+    pub_date = datetime.datetime.combine(episode_date, datetime.time(8, 0, 0), tzinfo=datetime.timezone.utc)
+    entry.pubDate(pub_date)
     
-    # Description (escape XML special characters)
-    description_elem = ET.SubElement(item, "description")
-    description_elem.text = html.escape(episode_description)
-    
-    # Publication date (RFC 822 format)
-    pub_date = datetime.datetime.combine(episode_date, datetime.time(8, 0, 0))
-    pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
-    ET.SubElement(item, "pubDate").text = pub_date.strftime("%a, %d %b %Y %H:%M:%S %z")
-    
-    # GUID (must be unique and permanent)
-    guid_elem = ET.SubElement(item, "guid", isPermaLink="false")
-    guid_elem.text = episode_guid
-    
-    # Enclosure (MP3 file)
-    mp3_url = f"{base_url}/digests/digests/{mp3_filename}"
-    # Get file size
+    # Enclosure
+    mp3_url = f"{base_url}/digests/{mp3_filename}"
     mp3_size = mp3_path.stat().st_size if mp3_path.exists() else 0
-    enclosure = ET.SubElement(item, "enclosure")
-    enclosure.set("url", mp3_url)
-    enclosure.set("type", "audio/mpeg")
-    enclosure.set("length", str(mp3_size))
+    entry.enclosure(url=mp3_url, type="audio/mpeg", length=str(mp3_size))
     
-    # iTunes-specific tags
-    ET.SubElement(item, "itunes:title").text = episode_title
-    itunes_summary = ET.SubElement(item, "itunes:summary")
-    itunes_summary.text = episode_description
-    ET.SubElement(item, "itunes:duration").text = format_duration(mp3_duration)
-    ET.SubElement(item, "itunes:episode").text = str(episode_num)
-    ET.SubElement(item, "itunes:season").text = "1"  # Season 1
-    ET.SubElement(item, "itunes:episodeType").text = "full"
-    ET.SubElement(item, "itunes:explicit").text = "no"
-    
-    # Add itunes:image to each episode (inherits from channel but explicit is better)
-    item_image = ET.SubElement(item, "itunes:image")
-    item_image.set("href", f"{base_url}/podcast-image.jpg")
+    # iTunes tags
+    entry.podcast.itunes_title(episode_title)
+    entry.podcast.itunes_summary(episode_description)
+    entry.podcast.itunes_duration(format_duration(mp3_duration))
+    entry.podcast.itunes_episode(str(episode_num))
+    entry.podcast.itunes_season("1")
+    entry.podcast.itunes_episode_type("full")
+    entry.podcast.itunes_explicit("no")
+    entry.podcast.itunes_image(f"{base_url}/podcast-image.jpg")
     
     # Update lastBuildDate
-    last_build_elem = channel.find("lastBuildDate")
-    if last_build_elem is not None:
-        last_build_elem.text = datetime.datetime.now(datetime.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
-    else:
-        ET.SubElement(channel, "lastBuildDate").text = datetime.datetime.now(datetime.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
-    
-    # Ensure all existing episodes have itunes:image and itunes:season (update if missing)
-    all_items = channel.findall("item")
-    for existing_item in all_items:
-        existing_item_image = existing_item.find("itunes:image")
-        if existing_item_image is None:
-            item_image = ET.SubElement(existing_item, "itunes:image")
-            item_image.set("href", f"{base_url}/podcast-image.jpg")
-            logging.info(f"Added itunes:image to existing episode in RSS feed")
-        # Ensure season tag exists
-        existing_item_season = existing_item.find("itunes:season")
-        if existing_item_season is None:
-            ET.SubElement(existing_item, "itunes:season").text = "1"
-            logging.info(f"Added itunes:season to existing episode in RSS feed")
-        elif existing_item_season.text != "1":
-            existing_item_season.text = "1"
-            logging.info(f"Updated itunes:season to 1 for existing episode in RSS feed")
-    
-    # Sort items by pubDate (newest first)
-    items = channel.findall("item")
-    if len(items) > 1:
-        items.sort(key=lambda x: x.find("pubDate").text if x.find("pubDate") is not None else "", reverse=True)
-        # Remove all items and re-add in sorted order
-        for item in items:
-            channel.remove(item)
-        for item in items:
-            channel.append(item)
+    fg.lastBuildDate(datetime.datetime.now(datetime.timezone.utc))
     
     # Write RSS feed
-    try:
-        tree = ET.ElementTree(root)
-        ET.indent(tree, space="  ")
-        # Write with proper XML declaration
-        with open(rss_path, "wb") as f:
-            f.write('<?xml version="1.0" encoding="UTF-8"?>\n'.encode('utf-8'))
-            tree.write(f, encoding="utf-8", xml_declaration=False)
-        
-        # Post-process to fix namespace prefixes (ElementTree sometimes uses ns0 instead of itunes)
-        # Read the file, replace ns0: with itunes: and ns1: with content: if needed
-        with open(rss_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        
-        # Replace namespace prefixes
-        content = content.replace('xmlns:ns0="http://www.itunes.com/dtds/podcast-1.0.dtd"', 'xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"')
-        content = content.replace('xmlns:ns1="http://purl.org/rss/1.0/modules/content/"', 'xmlns:content="http://purl.org/rss/1.0/modules/content/"')
-        content = content.replace('<ns0:', '<itunes:')
-        content = content.replace('</ns0:', '</itunes:')
-        content = content.replace('<ns1:', '<content:')
-        content = content.replace('</ns1:', '</content:')
-        
-        # Write back
-        with open(rss_path, "w", encoding="utf-8") as f:
-            f.write(content)
-        
-        # Force file modification time update to ensure git detects the change
-        import os
-        os.utime(rss_path, None)
-        
-        logging.info(f"RSS feed updated → {rss_path}")
-        logging.info(f"RSS feed contains {len(channel.findall('item'))} episode(s)")
-        logging.info(f"RSS feed file timestamp updated to ensure git detects changes")
-    except Exception as e:
-        logging.error(f"Failed to write RSS feed to {rss_path}: {e}", exc_info=True)
-        raise
+    fg.rss_file(str(rss_path), pretty=True)
+    logging.info(f"RSS feed updated → {rss_path} ({len(fg.entry())} episode(s))")
 
 # Since there's only one voice (Patrick), combine entire script into one segment
 # Remove speaker labels and sound cues, keep only the actual spoken text
@@ -2068,7 +2024,7 @@ if ENABLE_PODCAST and not TEST_MODE and final_mp3 and final_mp3.exists():
         # RSS feed path (save in project root for easy access)
         rss_path = project_root / "podcast.rss"
         
-        # MP3 filename relative to digests/digests/ (where files are saved)
+        # MP3 filename relative to digests/ (where files are saved)
         mp3_filename = final_mp3.name
         
         # Update RSS feed
@@ -2115,6 +2071,22 @@ try:
     logging.info("Temporary files cleaned up")
 except Exception as e:
     logging.warning(f"Cleanup warning: {e}")
+
+# ========================== CLEANUP TEMPORARY FILES ==========================
+logging.info("Cleaning up temporary files...")
+try:
+    # Clean up all temp files in tmp_dir
+    if tmp_dir.exists():
+        for tmp_file in tmp_dir.glob("*"):
+            try:
+                if tmp_file.is_file():
+                    tmp_file.unlink()
+                    logging.debug(f"Removed temp file: {tmp_file}")
+            except Exception as e:
+                logging.warning(f"Could not remove temp file {tmp_file}: {e}")
+    logging.info("Temporary files cleaned up")
+except Exception as e:
+    logging.warning(f"Error during temp file cleanup: {e}")
 
 print("\n" + "="*80)
 print("TESLA SHORTS TIME — FULLY AUTOMATED RUN COMPLETE")

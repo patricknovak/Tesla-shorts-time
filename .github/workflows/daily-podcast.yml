@@ -129,23 +129,19 @@ jobs:
     - name: List generated files
       run: |
         echo "Checking for generated files..."
-        echo "Files in digests/digests/:"
-        ls -lah digests/digests/*.md digests/digests/*.mp3 digests/digests/*.txt 2>/dev/null || echo "No files found in digests/digests/"
-        echo "Raw data files in digests/digests/:"
-        ls -lah digests/digests/raw_data_*.json digests/digests/raw_data_*.html digests/digests/raw_data_index.html 2>/dev/null || echo "No raw data files found in digests/digests/"
         echo "Files in digests/:"
         ls -lah digests/*.md digests/*.mp3 digests/*.txt 2>/dev/null || echo "No files found in digests/"
+        echo "Raw data files in digests/:"
+        ls -lah digests/raw_data_*.json digests/raw_data_*.html digests/raw_data_index.html 2>/dev/null || echo "No raw data files found in digests/"
         
     - name: Commit and push generated files
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        # Add files from digests/digests/ directory (where script saves them)
-        git add digests/digests/*.md digests/digests/*.mp3 digests/digests/*.txt 2>/dev/null || true
-        # Add raw data files (JSON and HTML)
-        git add digests/digests/raw_data_*.json digests/digests/raw_data_*.html digests/digests/raw_data_index.html 2>/dev/null || true
-        # Also check for files directly in digests/ (older format)
+        # Add files from digests/ directory (where script saves them)
         git add digests/*.md digests/*.mp3 digests/*.txt 2>/dev/null || true
+        # Add raw data files (JSON and HTML)
+        git add digests/raw_data_*.json digests/raw_data_*.html digests/raw_data_index.html 2>/dev/null || true
         # ALWAYS add RSS feed file (even if it was just updated, not new)
         git add podcast.rss 2>/dev/null || true
         echo "Staged files:"

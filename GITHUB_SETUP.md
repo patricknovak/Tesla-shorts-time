@@ -64,7 +64,7 @@ Once your code is on GitHub:
 ## Step 6: Find Your Generated Files
 
 After the workflow runs, files will be in:
-- **Repository** → `digests/digests/` folder
+- **Repository** → `digests/` folder
 - Look for commits with message: `"Auto-generated: Tesla Shorts Time YYYY-MM-DD"`
 
 ---
