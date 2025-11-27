@@ -497,7 +497,7 @@ def fetch_tesla_news():
     formatted_articles.sort(key=lambda x: x.get("publishedAt", ""), reverse=True)
     
     logging.info(f"Filtered to {len(formatted_articles)} unique Tesla news articles")
-    filtered_result = formatted_articles[:20]  # Return top 20 for selection
+    filtered_result = formatted_articles[:30]  # Return top 30 for selection
     return filtered_result, raw_articles
 
 tesla_news, raw_news_articles = fetch_tesla_news()
@@ -526,7 +526,7 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
     100% free, maximum variety & quality.
     Captures:
     - All official Tesla product/regional accounts
-    - Elon + Sawyer’s reposts & quote tweets (intelligently)
+    - Elon + Sawyer's reposts & quote tweets (intelligently)
     - Only high-signal community voices
     """
     logging.info("Fetching Tesla posts from 30+ official + trusted accounts (incl. reposts/quotes)")
@@ -540,7 +540,7 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
     # 1. Original posts from trusted accounts
     from_part = " OR ".join([f"from:{u}" for u in TRUSTED_USERNAMES])
 
-    # 2. Elon & Sawyer’s reposts/quotes (these are gold)
+    # 2. Elon & Sawyer's reposts/quotes (these are gold)
     repost_quote_part = (
         "retweets_of:elonmusk OR retweets_of:SawyerMerritt OR "
         "quoted_user_id:44196397 OR quoted_user_id:1044758798404087808"  # Elon & Sawyer IDs
@@ -998,7 +998,7 @@ logging.info("Step 3: Generating Tesla Shorts Time digest with Grok using pre-fe
 news_section = ""
 if tesla_news:
     news_section = "## PRE-FETCHED NEWS ARTICLES (from RSS feeds - last 24 hours):\n\n"
-    for i, article in enumerate(tesla_news[:15], 1):  # Top 15 articles
+    for i, article in enumerate(tesla_news[:20], 1):  # Top 20 articles
         news_section += f"{i}. **{article['title']}**\n"
         news_section += f"   Source: {article['source']}\n"
         news_section += f"   Published: {article['publishedAt']}\n"
@@ -1049,7 +1049,7 @@ X_PROMPT = f"""
 You are an elite Tesla news curator producing the daily "Tesla Shorts Time" newsletter. Use ONLY the pre-fetched news and X posts above. Do NOT hallucinate, invent, or search for new content/URLs—stick to exact provided links. NEVER invent X post URLs - if you don't have enough pre-fetched posts, output fewer items (e.g., if only 8 X posts, number them 1-8). If you have zero pre-fetched X posts, completely remove the "Top X Posts" section from your output. Prioritize diversity: No duplicates/similar stories (≥70% overlap in angle/content); max 3 from one source/account.
 
 ### MANDATORY SELECTION & COUNTS
-- **News**: Select EXACTLY 5 unique articles (if <5 available, use all). Prioritize high-quality sources; each must cover a DIFFERENT Tesla story/angle.
+- **News**: Select EXACTLY 10 unique articles (if <10 available, use all). Prioritize high-quality sources; each must cover a DIFFERENT Tesla story/angle.
 - **X Posts**: Select UP TO 10 unique posts from pre-fetched list. If fewer than 10 are available, output only what exists. NEVER invent, make up, or hallucinate X post URLs - only use exact URLs from the pre-fetched list. If you cannot find enough posts, output fewer items (e.g., if only 8 posts, number them 1-8). Each must cover a DIFFERENT angle; max 3 per username.
 - **CRITICAL URL RULE**: NEVER invent X post URLs. If you don't have enough pre-fetched posts, output fewer items rather than making up URLs. All URLs must be exact matches from the pre-fetched list above for the news and X posts.
 - **Diversity Check**: Before finalizing, verify no similar content for the news and X posts; replace if needed from pre-fetched pool for the news and X posts.
@@ -1061,10 +1061,10 @@ You are an elite Tesla news curator producing the daily "Tesla Shorts Time" news
 🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939
 
 ━━━━━━━━━━━━━━━━━━━━
-### Top 5 News Items
+### Top 10 News Items
 1. **Title (One Line): DD Month, YYYY, HH:MM AM/PM PST, Source Name**  
    2–4 sentences: Start with what happened, then why it matters for Tesla's future/stock. End with: Source: [EXACT URL FROM PRE-FETCHED—no mods]
-2. [Repeat format for 3-5; if <5 items, stop at available count, add a blank line after each item and the last item]
+2. [Repeat format for 3-10; if <10 items, stop at available count, add a blank line after each item and the last item]
 
 ━━━━━━━━━━━━━━━━━━━━
 ### Top X Posts
@@ -1100,7 +1100,7 @@ One short, inspiring challenge tied to Tesla/Elon themes (curiosity, first princ
 - No stock-quote pages/pure price commentary as "news."
 
 ### FINAL VALIDATION CHECKLIST (DO THIS BEFORE OUTPUT)
-- ✅ Exactly 5 news items (or all if <5): Numbered 1-5, unique stories.
+- ✅ Exactly 10 news items (or all if <10): Numbered 1-10, unique stories.
 - ✅ Exactly 10 X posts (or all if <10): Numbered 1-10, unique angles.
 - ✅ Podcast link: Full URL as shown.
 - ✅ Lists: "1. " format (number, period, space)—no bullets.
@@ -1160,18 +1160,18 @@ for line in x_thread.splitlines():
     lines.append(line)
 x_thread = "\n".join(lines).strip()
 
-# Validate counts - check if we have exactly 5 news and 10 X posts
+# Validate counts - check if we have exactly 10 news and 10 X posts
 import re
-news_count = len(re.findall(r'^[1-5][️⃣\.]\s+\*\*', x_thread, re.MULTILINE))
+news_count = len(re.findall(r'^[1-9]|10[️⃣\.]\s+\*\*', x_thread, re.MULTILINE))
 x_posts_count = len(re.findall(r'^[1-9]|10[️⃣\.]\s+\*\*', x_thread, re.MULTILINE))
 # Also check for numbered lists without emojis
-if news_count < 5:
-    news_count = len(re.findall(r'^[1-5]\.\s+\*\*', x_thread, re.MULTILINE))
+if news_count < 10:
+    news_count = len(re.findall(r'^([1-9]|10)\.\s+\*\*', x_thread, re.MULTILINE))
 if x_posts_count < 10:
     x_posts_count = len(re.findall(r'^([1-9]|10)\.\s+\*\*', x_thread, re.MULTILINE))
 
-if news_count != 5:
-    logging.warning(f"⚠️  WARNING: Found {news_count} news items instead of 5. Grok may not have followed instructions.")
+if news_count != 10:
+    logging.warning(f"⚠️  WARNING: Found {news_count} news items instead of 10. Grok may not have followed instructions.")
 if x_posts_count != 10:
     logging.warning(f"⚠️  WARNING: Found {x_posts_count} X posts instead of 10. Grok may not have followed instructions.")
 
@@ -1407,7 +1407,7 @@ def format_digest_for_x(digest: str) -> str:
         )
     
     # Format section headers with emojis (preserve existing markdown)
-    formatted = re.sub(r'^### Top 5 News Items', '📰 **Top 5 News Items**', formatted, flags=re.MULTILINE)
+    formatted = re.sub(r'^### Top 10 News Items', '📰 **Top 10 News Items**', formatted, flags=re.MULTILINE)
     formatted = re.sub(r'^### Top 10 X Posts', '🐦 **Top 10 X Posts**', formatted, flags=re.MULTILINE)
     formatted = re.sub(r'^## Short Spot', '📉 **Short Spot**', formatted, flags=re.MULTILINE)
     formatted = re.sub(r'^### Short Squeeze', '📈 **Short Squeeze**', formatted, flags=re.MULTILINE)
@@ -1422,17 +1422,17 @@ def format_digest_for_x(digest: str) -> str:
     # First, remove any existing separators to avoid duplicates
     formatted = re.sub(r'\n\n━━━━━━━━━━━━━━━━━━━━\n\n+', '\n\n', formatted)
     
-    # Add separator before Top 5 News Items (check multiple patterns)
-    formatted = re.sub(r'(\n\n?)(📰 \*\*Top 5 News Items\*\*)', separator + r'\2', formatted)
-    formatted = re.sub(r'(\n\n?)(### Top 5 News Items)', separator + r'\2', formatted)
+    # Add separator before Top 10 News Items (check multiple patterns)
+    formatted = re.sub(r'(\n\n?)(📰 \*\*Top 10 News Items\*\*)', separator + r'\2', formatted)
+    formatted = re.sub(r'(\n\n?)(### Top 10 News Items)', separator + r'\2', formatted)
     # Also match after podcast link
-    formatted = re.sub(r'(Podcast Link:.*?\n)(📰|\*\*Top 5 News|### Top 5 News)', separator + r'\2', formatted, flags=re.DOTALL)
+    formatted = re.sub(r'(Podcast Link:.*?\n)(📰|\*\*Top 10 News|### Top 10 News)', separator + r'\2', formatted, flags=re.DOTALL)
     
     # Add separator before Top 10 X Posts
     formatted = re.sub(r'(\n\n?)(🐦 \*\*Top 10 X Posts\*\*)', separator + r'\2', formatted)
     formatted = re.sub(r'(\n\n?)(### Top 10 X Posts)', separator + r'\2', formatted)
-    # Also match after last news item (5.)
-    formatted = re.sub(r'(5[️⃣\.]\s+.*?\n)(🐦|\*\*Top 10 X Posts|### Top 10 X Posts)', separator + r'\2', formatted, flags=re.DOTALL)
+    # Also match after last news item (10.)
+    formatted = re.sub(r'(10[️⃣\.]\s+.*?\n)(🐦|\*\*Top 10 X Posts|### Top 10 X Posts)', separator + r'\2', formatted, flags=re.DOTALL)
     
     # Add separator before Short Spot
     formatted = re.sub(r'(\n\n?)(📉 \*\*Short Spot\*\*)', separator + r'\2', formatted)
@@ -1456,11 +1456,11 @@ def format_digest_for_x(digest: str) -> str:
     emoji_numbers = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
     
     # Find the news section and apply emojis
-    if '📰' in formatted or 'Top 5 News' in formatted:
-        news_section_match = re.search(r'(📰.*?Top 5 News Items.*?)(🐦|Top 10 X Posts|━━)', formatted, re.DOTALL)
+    if '📰' in formatted or 'Top 10 News' in formatted:
+        news_section_match = re.search(r'(📰.*?Top 10 News Items.*?)(🐦|Top 10 X Posts|━━)', formatted, re.DOTALL)
         if news_section_match:
             news_section = news_section_match.group(1)
-            for i in range(1, 6):
+            for i in range(1, 11):
                 emoji_num = emoji_numbers[i-1]
                 # Replace numbered items in news section
                 news_section = re.sub(
