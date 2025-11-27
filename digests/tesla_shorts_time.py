@@ -425,7 +425,7 @@ def fetch_top_x_posts():
     OPTIMIZED FOR BASIC FREE PLAN:
     - Uses 1 combined query instead of 3 separate queries (66% reduction in API calls)
     - Requests 75 results total instead of 300 (75% reduction in tweet quota usage)
-    - Combined query covers all Tesla topics: Tesla, TSLA, Elon Musk, $TSLA, FSD, Cybertruck, Robotaxi
+    - Combined query covers all Tesla topics: Tesla, TSLA, Elon Musk, FSD, Cybertruck, Robotaxi
     - Excludes retweets and replies to get higher quality original content
     - Results are automatically sorted by relevance/engagement by X API
     
@@ -500,7 +500,7 @@ def fetch_top_x_posts():
     # This reduces from 3 API requests to 1, saving 66% of your monthly request quota
     # Combined query covers: Tesla, TSLA, Elon Musk, stock ticker, FSD, Cybertruck, Robotaxi
     # Using engagement-focused operators to get higher quality results with fewer requests
-    optimized_query = "(Tesla OR TSLA OR \"Elon Musk\" OR $TSLA OR \"Tesla FSD\" OR Cybertruck OR Robotaxi) -is:retweet -is:reply lang:en"
+    optimized_query = "(Tesla OR TSLA OR \"Elon Musk\" OR \"Tesla FSD\" OR Cybertruck OR Robotaxi) -is:retweet -is:reply lang:en"
     
     all_posts = []
     raw_tweets = []  # Initialize raw tweets list
