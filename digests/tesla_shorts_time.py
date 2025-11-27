@@ -1521,6 +1521,7 @@ def format_digest_for_x(digest: str) -> str:
 
 # Format the digest
 x_thread_formatted = format_digest_for_x(x_thread)
+x_thread_formatted = podcast_link + "\n\n" + x_thread_formatted   
 logging.info(f"Digest formatted for X ({len(x_thread_formatted)} characters)")
 
 # Save both versions (original and formatted)
