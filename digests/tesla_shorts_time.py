@@ -347,11 +347,17 @@ def fetch_tesla_news():
     
     # Tesla news site RSS feeds
     rss_feeds = [
-        "https://electrek.co/feed/",
+        "https://whatsuptesla.com/feed",
+        "https://www.thedrive.com/category/tesla-news/feed",
+        "https://www.tesery.com/en-in/blogs/news.atom",
+        "https://driveteslacanada.ca/feed/",
+        "http://feeds.feedburner.com/teslanorth",
+        "https://in.mashable.com/tesla.xml",
+        "https://teslainvestor.blogspot.com/feeds/posts/default",
+        "https://www.teslasiliconvalley.com/blog?format=rss",
         "https://www.teslarati.com/feed/",
         "https://www.notateslaapp.com/news/rss",
         "https://insideevs.com/rss/",
-        "https://www.theverge.com/rss/index.xml",  # General tech, but covers Tesla
     ]
     
     # Calculate cutoff time (last 24 hours)
@@ -417,16 +423,28 @@ def fetch_tesla_news():
                 
                 # Extract source name from feed
                 source_name = feed.feed.get("title", "Unknown")
-                if "electrek" in feed_url.lower():
-                    source_name = "Electrek"
+                if "whatsuptesla" in feed_url.lower():
+                    source_name = "What's Up Tesla"
+                elif "thedrive" in feed_url.lower():
+                    source_name = "The Drive"
+                elif "tesery" in feed_url.lower():
+                    source_name = "Tesery"
+                elif "driveteslacanada" in feed_url.lower() or "drivetesla" in feed_url.lower():
+                    source_name = "Drive Tesla Canada"
+                elif "teslanorth" in feed_url.lower() or "feedburner" in feed_url.lower():
+                    source_name = "Tesla North"
+                elif "mashable" in feed_url.lower():
+                    source_name = "Mashable"
+                elif "teslainvestor" in feed_url.lower() or "blogspot" in feed_url.lower():
+                    source_name = "Tesla Investor"
+                elif "teslasiliconvalley" in feed_url.lower():
+                    source_name = "Tesla Silicon Valley"
                 elif "teslarati" in feed_url.lower():
                     source_name = "Teslarati"
                 elif "notateslaapp" in feed_url.lower():
                     source_name = "Not a Tesla App"
                 elif "insideevs" in feed_url.lower():
                     source_name = "InsideEVs"
-                elif "theverge" in feed_url.lower():
-                    source_name = "The Verge"
                 
                 # Format article
                 article = {
