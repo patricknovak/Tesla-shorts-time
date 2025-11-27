@@ -97,8 +97,8 @@ load_dotenv(dotenv_path=env_path)
 # Required keys (X credentials only required if posting is enabled)
 required = [
     "GROK_API_KEY", 
-    "ELEVENLABS_API_KEY",
-    "NEWSAPI_KEY"  # For fetching Tesla news
+    "ELEVENLABS_API_KEY"
+    # NEWSAPI_KEY no longer required - using RSS feeds instead
 ]
 if ENABLE_X_POSTING:
     required.extend([
@@ -143,7 +143,7 @@ client = OpenAI(
 )
 ELEVEN_API = "https://api.elevenlabs.io/v1"
 ELEVEN_KEY = os.getenv("ELEVENLABS_API_KEY")
-NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
+# NEWSAPI_KEY no longer needed - using RSS feeds instead
 
 # ========================== SHORT INTEREST SCRAPER ==========================
 @retry(
@@ -280,8 +280,8 @@ def get_short_interest():
             "source": "fallback"
         }
 
-# ========================== STEP 1: FETCH TESLA NEWS FROM NEWSAPI.ORG ==========================
-logging.info("Step 1: Fetching Tesla news from newsapi.org for the last 24 hours...")
+# ========================== STEP 1: FETCH TESLA NEWS FROM RSS FEEDS ==========================
+logging.info("Step 1: Fetching Tesla news from RSS feeds for the last 24 hours...")
 
 def calculate_similarity(text1: str, text2: str) -> float:
     """Calculate similarity ratio between two texts (0.0 to 1.0)."""
@@ -341,78 +341,138 @@ def remove_similar_items(items, similarity_threshold=0.7, get_text_func=None):
     retry=retry_if_exception_type((requests.RequestException, requests.Timeout))
 )
 def fetch_tesla_news():
-    """Fetch Tesla-related news from newsapi.org for the last 24 hours.
+    """Fetch Tesla-related news from RSS feeds of Tesla news sites for the last 24 hours.
     Returns tuple: (filtered_articles, raw_articles) for saving raw data."""
-    newsapi_url = "https://newsapi.org/v2/everything"
+    import feedparser
     
-    # Calculate date range (last 24 hours)
-    from_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-    to_date = datetime.datetime.now().strftime("%Y-%m-%d")
+    # Tesla news site RSS feeds
+    rss_feeds = [
+        "https://electrek.co/feed/",
+        "https://www.teslarati.com/feed/",
+        "https://www.notateslaapp.com/news/rss",
+        "https://insideevs.com/rss/",
+        "https://www.theverge.com/rss/index.xml",  # General tech, but covers Tesla
+    ]
     
-    params = {
-        "q": "Tesla OR TSLA OR Robotaxi OR Optimus OR 4680 OR Supercharging OR AI5 OR Model 3 OR Model Y OR Model S OR Model X OR Cybertruck OR Roadster OR Semi OR Autopilot OR Full Self-Driving OR FSD OR Gigafactory OR Supercharger OR Powerwall OR Solar Roof",
-        "from": from_date,
-        "to": to_date,
-        "sortBy": "publishedAt",
-        "language": "en",
-        "pageSize": 50,  # Get up to 50 articles
-        "domains": "electrek.co,teslarati.com,notateslaapp.com,reuters.com,bloomberg.com,cnbc.com,insideevs.com,theverge.com",
-        "apiKey": NEWSAPI_KEY
-    }
+    # Calculate cutoff time (last 24 hours)
+    cutoff_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)
     
-    try:
-        response = requests.get(newsapi_url, params=params, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        
-        articles = data.get("articles", [])
-        logging.info(f"Fetched {len(articles)} articles from newsapi.org")
-        
-        # Store raw articles for saving
-        raw_articles = articles.copy()
-        
-        # Filter and format articles
-        formatted_articles = []
-        for article in articles:
-            # Skip articles without required fields
-            if not article.get("title") or not article.get("url"):
+    all_articles = []
+    raw_articles = []
+    
+    # Tesla-related keywords to filter articles
+    tesla_keywords = [
+        "tesla", "tsla", "model 3", "model y", "model s", "model x", 
+        "cybertruck", "roadster", "semi", "robotaxi", "optimus",
+        "fsd", "full self-driving", "autopilot", "supercharger",
+        "gigafactory", "powerwall", "solar roof", "4680", "ai5"
+    ]
+    
+    logging.info(f"Fetching Tesla news from {len(rss_feeds)} RSS feeds...")
+    
+    for feed_url in rss_feeds:
+        try:
+            # Parse RSS feed
+            feed = feedparser.parse(feed_url)
+            
+            if feed.bozo and feed.bozo_exception:
+                logging.warning(f"Failed to parse RSS feed {feed_url}: {feed.bozo_exception}")
                 continue
             
-            # Skip articles that are just stock quotes or price commentary
-            title_lower = article.get("title", "").lower()
-            if any(skip_term in title_lower for skip_term in ["stock quote", "tradingview", "yahoo finance ticker", "price chart"]):
-                continue
+            feed_articles = []
+            for entry in feed.entries:
+                # Parse published date
+                published_time = None
+                if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                    try:
+                        published_time = datetime.datetime(*entry.published_parsed[:6], tzinfo=datetime.timezone.utc)
+                    except (ValueError, TypeError):
+                        pass
+                elif hasattr(entry, 'updated_parsed') and entry.updated_parsed:
+                    try:
+                        published_time = datetime.datetime(*entry.updated_parsed[:6], tzinfo=datetime.timezone.utc)
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Skip if older than 24 hours
+                if published_time and published_time < cutoff_time:
+                    continue
+                
+                # Get title and description
+                title = entry.get("title", "").strip()
+                description = entry.get("description", "").strip() or entry.get("summary", "").strip()
+                link = entry.get("link", "").strip()
+                
+                if not title or not link:
+                    continue
+                
+                # Check if article is Tesla-related
+                title_desc_lower = (title + " " + description).lower()
+                if not any(keyword in title_desc_lower for keyword in tesla_keywords):
+                    continue
+                
+                # Skip stock quotes/price commentary
+                if any(skip_term in title_desc_lower for skip_term in ["stock quote", "tradingview", "yahoo finance ticker", "price chart"]):
+                    continue
+                
+                # Extract source name from feed
+                source_name = feed.feed.get("title", "Unknown")
+                if "electrek" in feed_url.lower():
+                    source_name = "Electrek"
+                elif "teslarati" in feed_url.lower():
+                    source_name = "Teslarati"
+                elif "notateslaapp" in feed_url.lower():
+                    source_name = "Not a Tesla App"
+                elif "insideevs" in feed_url.lower():
+                    source_name = "InsideEVs"
+                elif "theverge" in feed_url.lower():
+                    source_name = "The Verge"
+                
+                # Format article
+                article = {
+                    "title": title,
+                    "description": description,
+                    "url": link,
+                    "source": source_name,
+                    "publishedAt": published_time.isoformat() if published_time else datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    "author": entry.get("author", "")
+                }
+                
+                feed_articles.append(article)
+                raw_articles.append(article)
             
-            formatted_articles.append({
-                "title": article.get("title", ""),
-                "description": article.get("description", ""),
-                "url": article.get("url", ""),
-                "source": article.get("source", {}).get("name", "Unknown"),
-                "publishedAt": article.get("publishedAt", ""),
-                "author": article.get("author", "")
-            })
-        
-        # Remove similar/duplicate articles based on title similarity
-        before_dedup = len(formatted_articles)
-        formatted_articles = remove_similar_items(
-            formatted_articles,
-            similarity_threshold=0.75,  # 75% similarity = likely duplicate
-            get_text_func=lambda x: f"{x.get('title', '')} {x.get('description', '')}"
-        )
-        after_dedup = len(formatted_articles)
-        if before_dedup != after_dedup:
-            logging.info(f"Removed {before_dedup - after_dedup} similar/duplicate news articles")
-        
-        logging.info(f"Filtered to {len(formatted_articles)} unique Tesla news articles")
-        filtered_result = formatted_articles[:20]  # Return top 20 for selection
-        return filtered_result, raw_articles
-        
-    except Exception as e:
-        logging.error(f"Failed to fetch news from newsapi.org: {e}")
-        logging.warning("Continuing without newsapi.org data - will rely on Grok search")
+            logging.info(f"Fetched {len(feed_articles)} articles from {source_name}")
+            all_articles.extend(feed_articles)
+            
+        except Exception as e:
+            logging.warning(f"Failed to fetch RSS feed {feed_url}: {e}")
+            continue
+    
+    logging.info(f"Fetched {len(all_articles)} total articles from RSS feeds")
+    
+    if not all_articles:
+        logging.warning("No articles found from RSS feeds")
         return [], []
+    
+    # Remove similar/duplicate articles based on title similarity
+    before_dedup = len(all_articles)
+    formatted_articles = remove_similar_items(
+        all_articles,
+        similarity_threshold=0.75,  # 75% similarity = likely duplicate
+        get_text_func=lambda x: f"{x.get('title', '')} {x.get('description', '')}"
+    )
+    after_dedup = len(formatted_articles)
+    if before_dedup != after_dedup:
+        logging.info(f"Removed {before_dedup - after_dedup} similar/duplicate news articles")
+    
+    # Sort by published date (newest first)
+    formatted_articles.sort(key=lambda x: x.get("publishedAt", ""), reverse=True)
+    
+    logging.info(f"Filtered to {len(formatted_articles)} unique Tesla news articles")
+    filtered_result = formatted_articles[:20]  # Return top 20 for selection
+    return filtered_result, raw_articles
 
-tesla_news, raw_newsapi_articles = fetch_tesla_news()
+tesla_news, raw_news_articles = fetch_tesla_news()
 
 # ========================== STEP 2: FETCH TOP X POSTS FROM X API ==========================
 logging.info("Step 2: Fetching top X posts from the last 24 hours...")
@@ -645,7 +705,7 @@ def save_raw_data_and_generate_html(raw_news, raw_x_posts_data, output_dir):
     raw_data = {
         "date": date_str,
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "newsapi": {
+        "rss_feeds": {
             "total_articles": len(raw_news),
             "articles": raw_news
         },
@@ -871,7 +931,7 @@ def generate_raw_data_html(raw_data, output_dir):
         
         <div class="stats">
             <div class="stat-card">
-                <div class="stat-number">""" + str(raw_data["newsapi"]["total_articles"]) + """</div>
+                <div class="stat-number">""" + str(raw_data["rss_feeds"]["total_articles"]) + """</div>
                 <div class="stat-label">News Articles</div>
             </div>
             <div class="stat-card">
@@ -881,11 +941,11 @@ def generate_raw_data_html(raw_data, output_dir):
         </div>
         
         <div class="section">
-            <h2>📰 NewsAPI Articles (Raw)</h2>
+            <h2>📰 RSS Feed Articles (Raw)</h2>
 """
     
     # Add news articles
-    for i, article in enumerate(raw_data["newsapi"]["articles"], 1):
+    for i, article in enumerate(raw_data["rss_feeds"]["articles"], 1):
         title = html.escape(str(article.get("title") or "No title"))
         description = html.escape(str(article.get("description") or "No description"))
         url = html.escape(str(article.get("url") or "#"))
@@ -946,7 +1006,7 @@ def generate_raw_data_html(raw_data, output_dir):
 
 # Save raw data and generate HTML
 raw_json_path, raw_html_path = save_raw_data_and_generate_html(
-    raw_newsapi_articles, 
+    raw_news_articles, 
     raw_x_posts, 
     digests_dir
 )
@@ -957,7 +1017,7 @@ logging.info("Step 3: Generating Tesla Shorts Time digest with Grok using pre-fe
 # Format news articles for the prompt
 news_section = ""
 if tesla_news:
-    news_section = "## PRE-FETCHED NEWS ARTICLES (from newsapi.org - last 24 hours):\n\n"
+    news_section = "## PRE-FETCHED NEWS ARTICLES (from RSS feeds - last 24 hours):\n\n"
     for i, article in enumerate(tesla_news[:15], 1):  # Top 15 articles
         news_section += f"{i}. **{article['title']}**\n"
         news_section += f"   Source: {article['source']}\n"
