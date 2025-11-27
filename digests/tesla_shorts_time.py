@@ -447,7 +447,7 @@ def fetch_top_x_posts():
             logging.info("Attempting X API authentication with Bearer Token...")
             x_client = tweepy.Client(
                 bearer_token=bearer_token,
-                wait_on_rate_limit=True
+                wait_on_rate_limit=False  # Don't block on rate limits - handle gracefully instead
             )
             logging.info("✅ Bearer Token client initialized")
         except Exception as e:
@@ -463,7 +463,7 @@ def fetch_top_x_posts():
                 consumer_secret=consumer_secret,
                 access_token=access_token,
                 access_token_secret=access_token_secret,
-                wait_on_rate_limit=True
+                wait_on_rate_limit=False  # Don't block on rate limits - handle gracefully instead
             )
             logging.info("✅ OAuth 1.0a client initialized")
         except Exception as e:
@@ -569,6 +569,10 @@ def fetch_top_x_posts():
             else:
                 logging.warning("No tweets returned from search query")
                 
+        except tweepy.TooManyRequests as e:
+            logging.warning(f"⚠️  X API rate limit exceeded: {e}")
+            logging.warning("Continuing without X posts data (rate limit will reset later)")
+            return [], []
         except tweepy.Unauthorized as e:
             logging.warning(f"❌ X API Authentication failed (401 Unauthorized): {e}")
             logging.warning("Continuing without X posts data")
@@ -579,7 +583,10 @@ def fetch_top_x_posts():
             return [], []
         except Exception as e:
             error_msg = str(e)
-            if "401" in error_msg or "Unauthorized" in error_msg:
+            if "429" in error_msg or "rate limit" in error_msg.lower() or "TooManyRequests" in str(type(e)):
+                logging.warning(f"⚠️  X API rate limit exceeded: {e}")
+                logging.warning("Continuing without X posts data (rate limit will reset later)")
+            elif "401" in error_msg or "Unauthorized" in error_msg:
                 logging.warning(f"❌ X API Authentication failed (401): {e}")
                 logging.warning("Continuing without X posts data")
             else:
