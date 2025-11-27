@@ -544,11 +544,11 @@ def fetch_top_x_posts():
         # Single optimized search query - reduces API calls from 3 to 1
         try:
             logging.info(f"Executing optimized single search query...")
-            # Request fewer results since we only need top 20, but get enough to filter for quality
-            # 75 results gives us good diversity after deduplication while staying well under limits
+            # Request more results to get better selection of recent, high-engagement posts
+            # 100 results gives us better diversity and more recent posts to choose from
             tweets = x_client.search_recent_tweets(
                 query=optimized_query,
-                max_results=75,
+                max_results=100,  # Increased from 75 to get more recent posts
                 start_time=start_time,  # Filter to last 24 hours at API level for efficiency
                 tweet_fields=["created_at", "public_metrics", "author_id", "text"],
                 user_fields=["username", "name"],
@@ -582,7 +582,8 @@ def fetch_top_x_posts():
                         reply_count = metrics.get("reply_count", 0) if isinstance(metrics, dict) else 0
                         quote_count = metrics.get("quote_count", 0) if isinstance(metrics, dict) else 0
                     
-                    engagement = (
+                    # Base engagement score (weighted)
+                    base_engagement = (
                         like_count * 1 +
                         retweet_count * 2 +
                         reply_count * 1.5 +
@@ -597,6 +598,20 @@ def fetch_top_x_posts():
                     # Check if post is within last 24 hours
                     tweet_time = tweet.created_at
                     
+                    # Calculate recency boost (newer posts get higher score)
+                    # Posts from last 6 hours get 1.5x boost, last 12 hours get 1.2x, last 24 hours get 1.0x
+                    recency_multiplier = 1.0
+                    if tweet_time:
+                        hours_ago = (datetime.datetime.now(datetime.timezone.utc) - tweet_time).total_seconds() / 3600
+                        if hours_ago <= 6:
+                            recency_multiplier = 1.5  # Most recent posts get biggest boost
+                        elif hours_ago <= 12:
+                            recency_multiplier = 1.2  # Recent posts get moderate boost
+                        # else: 1.0 (no boost for older posts in 24h window)
+                    
+                    # Combined score: engagement * recency multiplier
+                    combined_score = base_engagement * recency_multiplier
+                    
                     # Store raw tweet data (all tweets, not just within 24h)
                     raw_tweet_data = {
                         "id": str(tweet.id),
@@ -605,7 +620,8 @@ def fetch_top_x_posts():
                         "name": name,
                         "url": f"https://x.com/{username}/status/{tweet.id}",
                         "created_at": tweet_time.isoformat() if tweet_time else None,
-                        "engagement": engagement,
+                        "engagement": base_engagement,
+                        "combined_score": combined_score,
                         "likes": like_count,
                         "retweets": retweet_count,
                         "replies": reply_count,
@@ -621,7 +637,8 @@ def fetch_top_x_posts():
                             "name": name,
                             "url": f"https://x.com/{username}/status/{tweet.id}",
                             "created_at": tweet_time.isoformat(),
-                            "engagement": engagement,
+                            "engagement": base_engagement,
+                            "combined_score": combined_score,  # Use combined score for sorting
                             "likes": like_count,
                             "retweets": retweet_count,
                             "replies": reply_count
@@ -654,8 +671,8 @@ def fetch_top_x_posts():
                 logging.warning("Continuing without X posts data")
             return [], []
         
-        # Sort by engagement and get top posts
-        all_posts.sort(key=lambda x: x["engagement"], reverse=True)
+        # Sort by combined score (engagement * recency) to prioritize recent, high-engagement posts
+        all_posts.sort(key=lambda x: x.get("combined_score", x.get("engagement", 0)), reverse=True)
         
         # Remove duplicates (by tweet ID)
         seen_ids = set()
@@ -678,7 +695,7 @@ def fetch_top_x_posts():
         
         # Get top 20 for selection
         top_posts = unique_posts[:20]
-        logging.info(f"Fetched {len(top_posts)} unique top X posts (ranked by engagement)")
+        logging.info(f"Fetched {len(top_posts)} unique top X posts (ranked by recency + engagement)")
         
         return top_posts, raw_tweets
         
@@ -1033,7 +1050,7 @@ x_posts_section = ""
 if top_x_posts:
     # Include all available posts (up to 20) to give Grok more options
     num_posts_to_include = min(len(top_x_posts), 20)
-    x_posts_section = f"## PRE-FETCHED X POSTS (from X API - last 24 hours, ranked by engagement):\n\n"
+    x_posts_section = f"## PRE-FETCHED X POSTS (from X API - last 24 hours, ranked by recency + engagement):\n\n"
     x_posts_section += f"**IMPORTANT: You have {len(top_x_posts)} pre-fetched X posts available. Select UP TO 10 from these pre-fetched posts. If you have fewer than 10, output only what exists. NEVER invent, make up, or hallucinate X post URLs - only use the exact URLs provided below. If you cannot find enough posts, output fewer items rather than inventing URLs.**\n\n"
     for i, post in enumerate(top_x_posts[:num_posts_to_include], 1):  # Include up to 20 posts
         x_posts_section += f"{i}. **@{post['username']} ({post['name']})**\n"
