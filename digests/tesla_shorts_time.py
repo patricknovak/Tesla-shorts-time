@@ -384,6 +384,8 @@ def fetch_tesla_news():
     logging.info(f"Fetching Tesla news from {len(rss_feeds)} RSS feeds...")
     
     for feed_url in rss_feeds:
+        # Initialize source_name before the try block
+        source_name = "Unknown"
         try:
             # Parse RSS feed
             feed = feedparser.parse(feed_url)
@@ -391,6 +393,31 @@ def fetch_tesla_news():
             if feed.bozo and feed.bozo_exception:
                 logging.warning(f"Failed to parse RSS feed {feed_url}: {feed.bozo_exception}")
                 continue
+            
+            # Extract source name from feed (before processing entries)
+            source_name = feed.feed.get("title", "Unknown")
+            if "whatsuptesla" in feed_url.lower():
+                source_name = "What's Up Tesla"
+            elif "thedrive" in feed_url.lower():
+                source_name = "The Drive"
+            elif "tesery" in feed_url.lower():
+                source_name = "Tesery"
+            elif "driveteslacanada" in feed_url.lower() or "drivetesla" in feed_url.lower():
+                source_name = "Drive Tesla Canada"
+            elif "teslanorth" in feed_url.lower() or "feedburner" in feed_url.lower():
+                source_name = "Tesla North"
+            elif "mashable" in feed_url.lower():
+                source_name = "Mashable"
+            elif "teslainvestor" in feed_url.lower() or "blogspot" in feed_url.lower():
+                source_name = "Tesla Investor"
+            elif "teslasiliconvalley" in feed_url.lower():
+                source_name = "Tesla Silicon Valley"
+            elif "teslarati" in feed_url.lower():
+                source_name = "Teslarati"
+            elif "notateslaapp" in feed_url.lower():
+                source_name = "Not a Tesla App"
+            elif "insideevs" in feed_url.lower():
+                source_name = "InsideEVs"
             
             feed_articles = []
             for entry in feed.entries:
@@ -428,31 +455,6 @@ def fetch_tesla_news():
                 if any(skip_term in title_desc_lower for skip_term in ["stock quote", "tradingview", "yahoo finance ticker", "price chart"]):
                     continue
                 
-                # Extract source name from feed
-                source_name = feed.feed.get("title", "Unknown")
-                if "whatsuptesla" in feed_url.lower():
-                    source_name = "What's Up Tesla"
-                elif "thedrive" in feed_url.lower():
-                    source_name = "The Drive"
-                elif "tesery" in feed_url.lower():
-                    source_name = "Tesery"
-                elif "driveteslacanada" in feed_url.lower() or "drivetesla" in feed_url.lower():
-                    source_name = "Drive Tesla Canada"
-                elif "teslanorth" in feed_url.lower() or "feedburner" in feed_url.lower():
-                    source_name = "Tesla North"
-                elif "mashable" in feed_url.lower():
-                    source_name = "Mashable"
-                elif "teslainvestor" in feed_url.lower() or "blogspot" in feed_url.lower():
-                    source_name = "Tesla Investor"
-                elif "teslasiliconvalley" in feed_url.lower():
-                    source_name = "Tesla Silicon Valley"
-                elif "teslarati" in feed_url.lower():
-                    source_name = "Teslarati"
-                elif "notateslaapp" in feed_url.lower():
-                    source_name = "Not a Tesla App"
-                elif "insideevs" in feed_url.lower():
-                    source_name = "InsideEVs"
-                
                 # Format article
                 article = {
                     "title": title,
@@ -470,6 +472,7 @@ def fetch_tesla_news():
             all_articles.extend(feed_articles)
             
         except Exception as e:
+            # Don't reference source_name in exception handler to avoid scoping issues
             logging.warning(f"Failed to fetch RSS feed {feed_url}: {e}")
             continue
     
@@ -500,6 +503,9 @@ def fetch_tesla_news():
 tesla_news, raw_news_articles = fetch_tesla_news()
 
 # ========================== STEP 2: FETCH TOP X POSTS FROM X API ==========================
+# Initialize variables at module level to ensure they're always defined
+top_x_posts = []
+raw_x_posts = []
 import datetime
 import logging
 from typing import List, Dict, Any
@@ -544,54 +550,36 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
     query = f"({from_part}) OR ({repost_quote_part}) -is:reply lang:en min_faves:15"
 
     try:
-        response = x_keyword_search(
-            query=query,
-            limit=200,
-            from_date=start_time.strftime("%Y-%m-%d"),
-            mode="Top"          # Let X sort by virality first
-        )
-
-        for post in response.get('data', []):
-            metrics = post.get('public_metrics', {})
-            engagement = (
-                metrics.get('like_count', 0) * 1.0 +
-                metrics.get('retweet_count', 0) * 3.0 +
-                metrics.get('reply_count', 0) * 1.2 +
-                metrics.get('quote_count', 0) * 2.5
-            )
-
-            created_at = datetime.datetime.fromisoformat(post['created_at'].replace('Z', '+00:00'))
-            hours_old = (end_time - created_at).total_seconds() / 3600
-            recency = 2.5 if hours_old <= 8 else (1.8 if hours_old <= 24 else 1.0)
-
-            author = post.get('author_username', '').lower()
-            boost = 4.0 if author == "elonmusk" else \
-                    3.0 if author in ["tesla", "tesla_ai", "cybertruck", "optimustelsa"] else \
-                    2.5 if author == "sawrymerritt" else 1.5
-
-            # Bonus if it's a repost/quote from Elon or Sawyer
-            is_signal_repost = any(ref.get('type') in ['retweeted', 'quoted'] and ref.get('author_id') in ["44196397", "1044758798404087808"]
-                                   for ref in post.get('referenced_tweets', [{}]))
-            if is_signal_repost:
-                boost *= 1.8
-
-            score = engagement * recency * boost
-
-            all_posts.append({
-                "id": post['id'],
-                "text": post['text'],
-                "username": post.get('author_username'),
-                "name": post.get('author_name'),
-                "url": f"https://x.com/{post.get('author_username')}/status/{post['id']}",
-                "created_at": post['created_at'],
-                "likes": metrics.get('like_count', 0),
-                "retweets": metrics.get('retweet_count', 0),
-                "final_score": score,
-                "is_elon_or_sawyer_repost": is_signal_repost,
-                "hours_old": round(hours_old, 1)
-            })
-
-        logging.info(f"Fetched & scored {len(all_posts)} posts from Tesla ecosystem")
+        # Note: This function needs to be implemented with tweepy or X API v2
+        # For now, return empty lists - the function will be called but will fail gracefully
+        logging.warning("⚠️  fetch_top_x_posts_from_trusted_accounts() is not fully implemented - x_keyword_search function missing")
+        logging.warning("Returning empty X posts list - please implement X API integration")
+        return [], []
+        
+        # TODO: Implement with tweepy.Client or X API v2
+        # The code below is commented out until x_keyword_search is implemented
+        # response = x_keyword_search(query=query, limit=200, from_date=start_time.strftime("%Y-%m-%d"), mode="Top")
+        # for post in response.get('data', []):
+        #     metrics = post.get('public_metrics', {})
+        #     engagement = (metrics.get('like_count', 0) * 1.0 + metrics.get('retweet_count', 0) * 3.0 + 
+        #                   metrics.get('reply_count', 0) * 1.2 + metrics.get('quote_count', 0) * 2.5)
+        #     created_at = datetime.datetime.fromisoformat(post['created_at'].replace('Z', '+00:00'))
+        #     hours_old = (end_time - created_at).total_seconds() / 3600
+        #     recency = 2.5 if hours_old <= 8 else (1.8 if hours_old <= 24 else 1.0)
+        #     author = post.get('author_username', '').lower()
+        #     boost = 4.0 if author == "elonmusk" else 3.0 if author in ["tesla", "tesla_ai", "cybertruck", "optimustelsa"] else 2.5 if author == "sawrymerritt" else 1.5
+        #     is_signal_repost = any(ref.get('type') in ['retweeted', 'quoted'] and ref.get('author_id') in ["44196397", "1044758798404087808"] for ref in post.get('referenced_tweets', [{}]))
+        #     if is_signal_repost:
+        #         boost *= 1.8
+        #     score = engagement * recency * boost
+        #     all_posts.append({
+        #         "id": post['id'], "text": post['text'], "username": post.get('author_username'),
+        #         "name": post.get('author_name'), "url": f"https://x.com/{post.get('author_username')}/status/{post['id']}",
+        #         "created_at": post['created_at'], "likes": metrics.get('like_count', 0),
+        #         "retweets": metrics.get('retweet_count', 0), "final_score": score,
+        #         "is_elon_or_sawyer_repost": is_signal_repost, "hours_old": round(hours_old, 1)
+        #     })
+        # logging.info(f"Fetched & scored {len(all_posts)} posts from Tesla ecosystem")
 
     except Exception as e:
         logging.warning(f"Search failed: {e}")
@@ -606,11 +594,26 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
     unique = [p for p in all_posts if p['id'] not in seen and (seen.add(p['id']) or True)]
 
     top_25 = unique[:25]
+    # Populate raw_posts with all fetched posts (before filtering to top 25)
+    raw_posts = all_posts.copy()
 
     logging.info(f"Returning {len(top_25)} best Tesla posts "
                  f"(Elon/Sawyer reposts: {sum(1 for p in top_25 if p['is_elon_or_sawyer_repost'])})")
 
     return top_25, raw_posts
+
+# Call the function to fetch X posts
+logging.info("Step 2: Fetching top X posts from trusted accounts...")
+try:
+    top_x_posts, raw_x_posts = fetch_top_x_posts_from_trusted_accounts()
+    if len(top_x_posts) < 8:
+        logging.warning(f"⚠️  Only {len(top_x_posts)} X posts were fetched (minimum 8 recommended). Continuing anyway - Grok will skip X posts section if needed.")
+except Exception as e:
+    logging.error(f"Failed to fetch X posts: {e}")
+    logging.warning("Continuing without X posts data")
+    top_x_posts = []
+    raw_x_posts = []
+
 # ========================== SAVE RAW DATA AND GENERATE HTML PAGE ==========================
 logging.info("Saving raw data and generating HTML page for raw news and X posts...")
 
