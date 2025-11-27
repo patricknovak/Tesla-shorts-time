@@ -414,222 +414,160 @@ def fetch_tesla_news():
 
 tesla_news, raw_newsapi_articles = fetch_tesla_news()
 
-# ========================== STEP 2: FETCH TOP X POSTS FROM X API ==========================
-logging.info("Step 2: Fetching top X posts from the last 24 hours...")
+# ========================== STEP 2: FETCH TOP X POSTS USING TWINT ==========================
+logging.info("Step 2: Fetching top X posts from the last 24 hours using Twint...")
 
 def fetch_top_x_posts():
     """
-    Fetch top X posts about Tesla from the last 24 hours, ranked by engagement.
+    Fetch top X posts about Tesla from the last 24 hours using Twint (no API keys required).
     Returns tuple: (filtered_posts, raw_posts) for saving raw data.
     
-    OPTIMIZED FOR BASIC FREE PLAN:
-    - Uses 1 combined query instead of 3 separate queries (66% reduction in API calls)
-    - Requests 75 results total instead of 300 (75% reduction in tweet quota usage)
-    - Combined query covers all Tesla topics: Tesla, TSLA, Elon Musk, FSD, Cybertruck, Robotaxi
-    - Excludes retweets and replies to get higher quality original content
-    - Results are automatically sorted by relevance/engagement by X API
-    
-    This optimization reduces monthly API usage from ~90 requests/month (3 queries × 30 days) 
-    to ~30 requests/month (1 query × 30 days), staying well within basic plan limits.
+    Uses Twint - an open-source Python library that scrapes X without API keys.
+    - No authentication required
+    - No rate limits (but respects X's robots.txt)
+    - Searches by keyword, date, and filters retweets/replies
     """
-    if not ENABLE_X_POSTING:
-        logging.warning("X posting disabled - cannot fetch X posts. Will rely on Grok search.")
-        return []
+    try:
+        import twint
+    except ImportError:
+        logging.error("❌ Twint not installed. Install with: pip install git+https://github.com/twintproject/twint.git")
+        logging.warning("Falling back to empty results")
+        return [], []
     
-    import tweepy
+    # Calculate date range (last 24 hours)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    since_date = (now - datetime.timedelta(hours=24)).strftime("%Y-%m-%d")
+    until_date = now.strftime("%Y-%m-%d")
     
-    # Check if credentials are available
-    consumer_key = os.getenv("X_CONSUMER_KEY")
-    consumer_secret = os.getenv("X_CONSUMER_SECRET")
-    access_token = os.getenv("X_ACCESS_TOKEN")
-    access_token_secret = os.getenv("X_ACCESS_TOKEN_SECRET")
-    bearer_token = os.getenv("X_BEARER_TOKEN")  # Optional Bearer Token
-    
-    # Validate credentials are not empty
-    if not all([consumer_key, consumer_secret, access_token, access_token_secret]):
-        missing = [k for k, v in [
-            ("X_CONSUMER_KEY", consumer_key),
-            ("X_CONSUMER_SECRET", consumer_secret),
-            ("X_ACCESS_TOKEN", access_token),
-            ("X_ACCESS_TOKEN_SECRET", access_token_secret)
-        ] if not v]
-        logging.error(f"Missing or empty X API credentials: {', '.join(missing)}")
-        logging.error("Please check your GitHub Secrets and ensure all X API credentials are set correctly.")
-        return []
-    
-    # Try Bearer Token first if available (simpler auth, works for read-only operations)
-    x_client = None
-    if bearer_token:
-        try:
-            logging.info("Attempting X API authentication with Bearer Token...")
-            x_client = tweepy.Client(
-                bearer_token=bearer_token,
-                wait_on_rate_limit=True
-            )
-            logging.info("✅ Bearer Token client initialized")
-        except Exception as e:
-            logging.warning(f"Failed to initialize with Bearer Token: {e}")
-            x_client = None
-    
-    # Fall back to OAuth 1.0a if Bearer Token not available or failed
-    if x_client is None:
-        try:
-            logging.info("Attempting X API authentication with OAuth 1.0a...")
-            x_client = tweepy.Client(
-                consumer_key=consumer_key,
-                consumer_secret=consumer_secret,
-                access_token=access_token,
-                access_token_secret=access_token_secret,
-                wait_on_rate_limit=True
-            )
-            logging.info("✅ OAuth 1.0a client initialized")
-        except Exception as e:
-            logging.error(f"Failed to initialize X API client: {e}")
-            logging.error("Please verify your X API credentials in GitHub Secrets:")
-            logging.error("  - X_CONSUMER_KEY")
-            logging.error("  - X_CONSUMER_SECRET")
-            logging.error("  - X_ACCESS_TOKEN")
-            logging.error("  - X_ACCESS_TOKEN_SECRET")
-            logging.error("  - X_BEARER_TOKEN (optional, but recommended for search)")
-            return []
-    
-    # Calculate date range (last 24 hours) - use start_time to filter at API level for efficiency
-    start_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)
-    
-    # OPTIMIZED: Single combined query instead of 3 separate queries to minimize API calls
-    # This reduces from 3 API requests to 1, saving 66% of your monthly request quota
-    # Combined query covers: Tesla, TSLA, Elon Musk, stock ticker, FSD, Cybertruck, Robotaxi
-    # Using engagement-focused operators to get higher quality results with fewer requests
-    optimized_query = "(Tesla OR TSLA OR \"Elon Musk\" OR \"Tesla FSD\" OR Cybertruck OR Robotaxi) -is:retweet -is:reply lang:en"
+    # Search query - Tesla-related keywords
+    search_query = "Tesla OR TSLA OR \"Elon Musk\" OR \"Tesla FSD\" OR Cybertruck OR Robotaxi"
     
     all_posts = []
-    raw_tweets = []  # Initialize raw tweets list
+    raw_tweets = []
     
     try:
-        # Single optimized search query - reduces API calls from 3 to 1
-        try:
-            logging.info(f"Executing optimized single search query (reduces API usage by 66%)...")
-            # Request fewer results since we only need top 20, but get enough to filter for quality
-            # 75 results gives us good diversity after deduplication while staying well under limits
-            # Using start_time filters at API level, reducing unnecessary data transfer
-            tweets = x_client.search_recent_tweets(
-                query=optimized_query,
-                max_results=75,  # Reduced from 100 per query (was 300 total across 3 queries, now 75 total)
-                start_time=start_time,  # Filter to last 24 hours at API level for efficiency
-                tweet_fields=["created_at", "public_metrics", "author_id", "text"],
-                user_fields=["username", "name"],
-                expansions=["author_id"]
-                # Note: sort_order is not available for recent tweets on basic plan
-                # Results are automatically sorted by relevance/engagement by X API
+        logging.info("Fetching X posts using Twint (no API keys required)...")
+        
+        # Configure Twint
+        c = twint.Config()
+        c.Search = search_query
+        c.Since = since_date
+        c.Until = until_date
+        c.Lang = "en"
+        c.Filter_retweets = True  # Exclude retweets
+        c.Hide_output = True  # Don't print to console
+        c.Store_object = True  # Store results in c.tweets
+        c.Limit = 200  # Get up to 200 tweets to filter for quality
+        
+        # Run search
+        twint.run.Search(c)
+        
+        if not hasattr(c, 'tweets') or not c.tweets:
+            logging.warning("No tweets returned from Twint search")
+            return [], []
+        
+        logging.info(f"Processing {len(c.tweets)} tweets from Twint...")
+        
+        # Process tweets
+        for tweet in c.tweets:
+            # Skip if it's a reply (Twint doesn't have a direct filter for this, so check manually)
+            if hasattr(tweet, 'reply_to') and tweet.reply_to:
+                continue
+            
+            # Parse date
+            try:
+                if hasattr(tweet, 'datestamp') and hasattr(tweet, 'timestamp'):
+                    # Combine date and time
+                    date_str = f"{tweet.datestamp} {tweet.timestamp}"
+                    tweet_time = datetime.datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+                    # Make timezone-aware (assume UTC)
+                    tweet_time = tweet_time.replace(tzinfo=datetime.timezone.utc)
+                elif hasattr(tweet, 'datetime'):
+                    # Try parsing datetime string
+                    tweet_time = datetime.datetime.fromisoformat(tweet.datetime.replace('Z', '+00:00'))
+                else:
+                    tweet_time = None
+            except (ValueError, AttributeError):
+                tweet_time = None
+            
+            # Check if within last 24 hours
+            if tweet_time:
+                time_diff = (now - tweet_time).total_seconds()
+                if time_diff > 86400 or time_diff < 0:  # More than 24 hours or future date
+                    continue
+            
+            # Get engagement metrics
+            likes = getattr(tweet, 'likes_count', 0) or 0
+            retweets = getattr(tweet, 'retweets_count', 0) or 0
+            replies = getattr(tweet, 'replies_count', 0) or 0
+            quotes = getattr(tweet, 'quotes_count', 0) or 0
+            
+            # Calculate engagement score (same weighting as before)
+            engagement = (
+                likes * 1 +
+                retweets * 2 +
+                replies * 1.5 +
+                quotes * 2
             )
             
-            if tweets.data:
-                # Get user data
-                if tweets.includes and hasattr(tweets.includes, 'users'):
-                    users = {user.id: user for user in tweets.includes.users}
-                elif tweets.includes and isinstance(tweets.includes, dict):
-                    users = {user.id: user for user in tweets.includes.get("users", [])}
-                else:
-                    users = {}
-                
-                logging.info(f"Processing {len(tweets.data)} tweets from optimized search...")
-                
-                for tweet in tweets.data:
-                    # Calculate engagement score (weighted)
-                    # Tweepy v4+ uses public_metrics as an object with attributes
-                    metrics = tweet.public_metrics if hasattr(tweet, 'public_metrics') else {}
-                    if hasattr(metrics, 'like_count'):
-                        # It's a metrics object
-                        like_count = getattr(metrics, 'like_count', 0)
-                        retweet_count = getattr(metrics, 'retweet_count', 0)
-                        reply_count = getattr(metrics, 'reply_count', 0)
-                        quote_count = getattr(metrics, 'quote_count', 0)
-                    else:
-                        # It's a dict
-                        like_count = metrics.get("like_count", 0) if isinstance(metrics, dict) else 0
-                        retweet_count = metrics.get("retweet_count", 0) if isinstance(metrics, dict) else 0
-                        reply_count = metrics.get("reply_count", 0) if isinstance(metrics, dict) else 0
-                        quote_count = metrics.get("quote_count", 0) if isinstance(metrics, dict) else 0
-                    
-                    engagement = (
-                        like_count * 1 +
-                        retweet_count * 2 +
-                        reply_count * 1.5 +
-                        quote_count * 2
-                    )
-                    
-                    # Get username
-                    author = users.get(tweet.author_id)
-                    username = author.username if author else "unknown"
-                    name = author.name if author else "Unknown"
-                    
-                    # Check if post is within last 24 hours
-                    tweet_time = tweet.created_at
-                    
-                    # Store raw tweet data (all tweets, not just within 24h)
-                    raw_tweet_data = {
-                        "id": str(tweet.id),
-                        "text": tweet.text,
-                        "username": username,
-                        "name": name,
-                        "url": f"https://x.com/{username}/status/{tweet.id}",
-                        "created_at": tweet_time.isoformat() if tweet_time else None,
-                        "engagement": engagement,
-                        "likes": like_count,
-                        "retweets": retweet_count,
-                        "replies": reply_count,
-                        "quotes": quote_count
-                    }
-                    raw_tweets.append(raw_tweet_data)
-                    
-                    if tweet_time and (datetime.datetime.now(datetime.timezone.utc) - tweet_time).total_seconds() <= 86400:
-                        all_posts.append({
-                            "id": tweet.id,
-                            "text": tweet.text,
-                            "username": username,
-                            "name": name,
-                            "url": f"https://x.com/{username}/status/{tweet.id}",
-                            "created_at": tweet_time.isoformat(),
-                            "engagement": engagement,
-                            "likes": like_count,
-                            "retweets": retweet_count,
-                            "replies": reply_count
-                        })
+            # Get user info
+            username = getattr(tweet, 'username', 'unknown') or 'unknown'
+            name = getattr(tweet, 'name', 'Unknown') or 'Unknown'
+            tweet_id = getattr(tweet, 'id', None) or getattr(tweet, 'tweet', '')
+            
+            # Get tweet text
+            text = getattr(tweet, 'tweet', '') or getattr(tweet, 'full_text', '') or ''
+            
+            if not text:
+                continue
+            
+            # Construct URL
+            if tweet_id:
+                url = f"https://x.com/{username}/status/{tweet_id}"
             else:
-                logging.warning("No tweets returned from search query")
-                
-        except tweepy.Unauthorized as e:
-            logging.error(f"❌ X API Authentication failed (401 Unauthorized): {e}")
-            logging.error("This usually means:")
-            logging.error("  1. X API credentials in GitHub Secrets are incorrect or expired")
-            logging.error("  2. The Bearer Token or OAuth credentials don't have search permissions")
-            logging.error("  3. The X API app doesn't have the required access level")
-            logging.error("Please verify your X API credentials in GitHub Secrets:")
-            logging.error("  - X_CONSUMER_KEY")
-            logging.error("  - X_CONSUMER_SECRET")
-            logging.error("  - X_ACCESS_TOKEN")
-            logging.error("  - X_ACCESS_TOKEN_SECRET")
-            logging.error("  - X_BEARER_TOKEN (optional but recommended for search)")
-        except tweepy.Forbidden as e:
-            logging.error(f"❌ X API Forbidden (403): {e}")
-            logging.error("This usually means the API credentials don't have permission to search.")
-        except Exception as e:
-            error_msg = str(e)
-            if "401" in error_msg or "Unauthorized" in error_msg:
-                logging.error(f"❌ X API Authentication failed (401): {e}")
-                logging.error("Please check your X API credentials in GitHub Secrets.")
-            else:
-                logging.warning(f"Error searching X API: {e}")
+                # Fallback if no ID
+                url = f"https://x.com/{username}"
+            
+            # Store raw tweet data
+            raw_tweet_data = {
+                "id": str(tweet_id) if tweet_id else f"twint_{hash(text)}",
+                "text": text,
+                "username": username,
+                "name": name,
+                "url": url,
+                "created_at": tweet_time.isoformat() if tweet_time else None,
+                "engagement": engagement,
+                "likes": likes,
+                "retweets": retweets,
+                "replies": replies,
+                "quotes": quotes
+            }
+            raw_tweets.append(raw_tweet_data)
+            
+            # Add to posts list
+            all_posts.append({
+                "id": tweet_id if tweet_id else f"twint_{hash(text)}",
+                "text": text,
+                "username": username,
+                "name": name,
+                "url": url,
+                "created_at": tweet_time.isoformat() if tweet_time else now.isoformat(),
+                "engagement": engagement,
+                "likes": likes,
+                "retweets": retweets,
+                "replies": replies
+            })
         
         # Sort by engagement and get top posts
         all_posts.sort(key=lambda x: x["engagement"], reverse=True)
         
-        # Remove duplicates (by tweet ID)
+        # Remove duplicates (by tweet ID or text hash)
         seen_ids = set()
         unique_posts = []
         for post in all_posts:
-            if post["id"] not in seen_ids:
-                seen_ids.add(post["id"])
+            post_id = post["id"]
+            if post_id not in seen_ids:
+                seen_ids.add(post_id)
                 unique_posts.append(post)
         
         # Remove similar/duplicate posts based on text content similarity
@@ -650,8 +588,8 @@ def fetch_top_x_posts():
         return top_posts, raw_tweets
         
     except Exception as e:
-        logging.error(f"Failed to fetch X posts: {e}")
-        logging.warning("Continuing without X API data - will rely on Grok search")
+        logging.error(f"Failed to fetch X posts with Twint: {e}")
+        logging.warning("Continuing without X posts data")
         return [], []
 
 top_x_posts, raw_x_posts = fetch_top_x_posts()
@@ -1001,7 +939,7 @@ x_posts_section = ""
 if top_x_posts:
     # Include all available posts (up to 20) to give Grok more options
     num_posts_to_include = min(len(top_x_posts), 20)
-    x_posts_section = f"## PRE-FETCHED X POSTS (from X API - last 24 hours, ranked by engagement):\n\n"
+    x_posts_section = f"## PRE-FETCHED X POSTS (from Twint - last 24 hours, ranked by engagement):\n\n"
     x_posts_section += f"**IMPORTANT: You have {len(top_x_posts)} pre-fetched X posts available. Select UP TO 10 from these pre-fetched posts. If you have fewer than 10, output only what exists. NEVER invent, make up, or hallucinate X post URLs - only use the exact URLs provided below. If you cannot find enough posts, output fewer items rather than inventing URLs.**\n\n"
     for i, post in enumerate(top_x_posts[:num_posts_to_include], 1):  # Include up to 20 posts
         x_posts_section += f"{i}. **@{post['username']} ({post['name']})**\n"
