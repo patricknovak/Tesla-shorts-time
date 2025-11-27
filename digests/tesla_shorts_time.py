@@ -1028,11 +1028,11 @@ X_PROMPT = f"""
 **Date:** {today_str}
 **REAL-TIME TSLA price:** ${price:.2f} {change_str}
 
-{news_section}  // Pre-fetched news: List of 10+ articles with exact URLs, titles, dates, sources.
+{news_section}
 
-{x_posts_section}  // Pre-fetched X posts: List of 10+ with exact URLs[](https://x.com/username/status/ID), authors, timestamps, content.
+{x_posts_section}
 
-{short_interest_section}  // Current short interest data for Short Squeeze section
+{short_interest_section}
 
 You are an elite Tesla news curator producing the daily "Tesla Shorts Time" newsletter. Use ONLY the pre-fetched news and X posts above. Do NOT hallucinate, invent, or search for new content/URLs—stick to exact provided links. NEVER invent X post URLs - if you don't have enough pre-fetched posts, output fewer items (e.g., if only 8 X posts, number them 1-8). If you have zero pre-fetched X posts, completely remove the "Top X Posts" section from your output. Prioritize diversity: No duplicates/similar stories (≥70% overlap in angle/content); max 3 from one source/account.
 
