@@ -24,6 +24,7 @@ from difflib import SequenceMatcher
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from bs4 import BeautifulSoup
 from zoneinfo import ZoneInfo
+from PIL import Image, ImageDraw, ImageFont
 
 # ========================== LOGGING ==========================
 logging.basicConfig(
@@ -2233,6 +2234,13 @@ if ENABLE_PODCAST and not TEST_MODE and final_mp3 and final_mp3.exists():
         # MP3 filename relative to digests/ (where files are saved)
         mp3_filename = final_mp3.name
         
+        # Generate thumbnail
+        thumbnail_filename = f"Tesla_Shorts_Time_Thumbnail_Ep{episode_num:03d}_{datetime.date.today():%Y%m%d}.png"
+        thumbnail_path = digests_dir / thumbnail_filename
+        base_image_path = project_root / "podcast-image.jpg"
+        generate_episode_thumbnail(base_image_path, episode_num, today_str, thumbnail_path)
+        episode_image_url = f"{base_url}/digests/{thumbnail_filename}"
+        
         # Update RSS feed
         update_rss_feed(
             rss_path=rss_path,
@@ -2299,3 +2307,15 @@ print("TESLA SHORTS TIME — FULLY AUTOMATED RUN COMPLETE")
 print(f"X Thread → {x_path}")
 print(f"Podcast → {final_mp3}")
 print("="*80)
+
+# Add at the end of the file, before the final print statements
+def generate_episode_thumbnail(base_image_path, episode_num, date_str, output_path):
+    img = Image.open(base_image_path)
+    draw = ImageDraw.Draw(img)
+    try:
+        font = ImageFont.truetype("arial.ttf", 48)
+    except IOError:
+        font = ImageFont.load_default()
+    draw.text((50, 50), f"Episode {episode_num}", font=font, fill=(255, 255, 255))
+    draw.text((50, 100), date_str, font=font, fill=(255, 255, 255))
+    img.save(output_path, "PNG")
