@@ -350,7 +350,7 @@ def fetch_tesla_news():
     to_date = datetime.datetime.now().strftime("%Y-%m-%d")
     
     params = {
-        "q": "Tesla OR TSLA OR Elon Musk OR $TSLA OR Robotaxi OR Optimus OR 4680 OR Supercharging OR AI5 OR Model 3 OR Model Y OR Model S OR Model X OR Cybertruck OR Roadster OR Semi OR Robotaxi OR Optimus OR Autopilot OR Full Self-Driving OR FSD OR Gigafactory OR Supercharger OR Powerwall OR Solar Roof",
+        "q": "Tesla OR TSLA OR Robotaxi OR Optimus OR 4680 OR Supercharging OR AI5 OR Model 3 OR Model Y OR Model S OR Model X OR Cybertruck OR Roadster OR Semi OR Autopilot OR Full Self-Driving OR FSD OR Gigafactory OR Supercharger OR Powerwall OR Solar Roof",
         "from": from_date,
         "to": to_date,
         "sortBy": "publishedAt",
@@ -475,7 +475,7 @@ def fetch_top_x_posts():
     start_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)
     
     # OPTIMIZED: Single combined query instead of 3 separate queries to minimize API calls
-    optimized_query = "(Tesla OR TSLA OR \"Elon Musk\" OR \"Tesla FSD\" OR Cybertruck OR Robotaxi) -is:retweet -is:reply lang:en"
+    optimized_query = "(Tesla OR TSLA OR \"Tesla FSD\" OR Cybertruck OR Robotaxi OR Optimus OR Model 3 OR Model Y OR Model S OR Model X) -is:retweet -is:reply lang:en"
     
     all_posts = []
     raw_tweets = []  # Initialize raw tweets list
