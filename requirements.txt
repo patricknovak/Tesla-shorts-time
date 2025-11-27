@@ -6,4 +6,3 @@ requests>=2.31.0
 tenacity>=8.2.3
 feedgen>=1.0.0
 beautifulsoup4>=4.12.0
-twint @ git+https://github.com/twintproject/twint.git
