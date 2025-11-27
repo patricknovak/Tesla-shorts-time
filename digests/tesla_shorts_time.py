@@ -23,6 +23,7 @@ from openai import OpenAI
 from difflib import SequenceMatcher
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from bs4 import BeautifulSoup
+from zoneinfo import ZoneInfo
 
 # ========================== LOGGING ==========================
 logging.basicConfig(
@@ -112,7 +113,10 @@ for var in required:
         raise OSError(f"Missing {var} in .env")
 
 # ========================== DATE & PRICE (MUST BE FIRST) ==========================
-today_str = datetime.date.today().strftime("%B %d, %Y")   # November 19, 2025
+# Get current date and time in PST
+pst_tz = ZoneInfo("America/Los_Angeles")
+now_pst = datetime.datetime.now(pst_tz)
+today_str = now_pst.strftime("%B %d, %Y at %I:%M %p PST")   # November 19, 2025 at 02:30 PM PST
 yesterday_iso = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
 seven_days_ago_iso = (datetime.date.today() - datetime.timedelta(days=7)).isoformat()
 
