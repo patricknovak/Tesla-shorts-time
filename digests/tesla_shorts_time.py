@@ -42,6 +42,9 @@ ENABLE_X_POSTING = True
 # Set to False to disable podcast generation and RSS feed updates
 ENABLE_PODCAST = True
 
+# Set to False to disable link validation (useful for testing if validation is necessary)
+ENABLE_LINK_VALIDATION = False  # Set to False to skip link validation
+
 
 # ========================== PRONUNCIATION FIXER v2 – NEVER BREAKS NORMAL WORDS ==========================
 def fix_tesla_pronunciation(text: str) -> str:
@@ -497,241 +500,117 @@ def fetch_tesla_news():
 tesla_news, raw_news_articles = fetch_tesla_news()
 
 # ========================== STEP 2: FETCH TOP X POSTS FROM X API ==========================
-logging.info("Step 2: Fetching top X posts from the last 24 hours...")
+import datetime
+import logging
+from typing import List, Dict, Any
 
-def fetch_top_x_posts():
+TRUSTED_USERNAMES = [
+    # Official
+    "elonmusk", "Tesla", "Tesla_AI", "cybertruck", "TeslaCharging", "teslaenergy",
+    "OptimusTesla", "GigaTexas", "GigaBerlin", "GigaShanghai", "TeslaSolar",
+    "tesla_na", "teslaeurope", "Tesla_Asia", "Tesla_Japan", "Tesla_AUNZ",
+    # Community kings
+    "SawyerMerritt", "WholeMarsBlog", "TeslaRaj", "TroyTeslike", "herbertong",
+    "BLKMDL3", "DirtyTesla", "outofspecreviews", "tesladailypodcast", "ElectricKiwi",
+    "JeffTutorials", "ChuckCookFSD", "AIDRIVR", "tesla_archive"
+]
+
+def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
     """
-    Fetch top X posts about Tesla from the last 24 hours using X API (Tweepy).
-    Returns tuple: (filtered_posts, raw_posts) for saving raw data.
-    
-    OPTIONAL: If X API credentials are not available, returns empty lists and continues.
-    This allows the script to run without X posts if credentials are missing.
+    100% free, maximum variety & quality.
+    Captures:
+    - All official Tesla product/regional accounts
+    - Elon + Sawyer’s reposts & quote tweets (intelligently)
+    - Only high-signal community voices
     """
-    import tweepy
-    
-    # Check if credentials are available (optional - don't fail if missing)
-    consumer_key = os.getenv("X_CONSUMER_KEY")
-    consumer_secret = os.getenv("X_CONSUMER_SECRET")
-    access_token = os.getenv("X_ACCESS_TOKEN")
-    access_token_secret = os.getenv("X_ACCESS_TOKEN_SECRET")
-    bearer_token = os.getenv("X_BEARER_TOKEN")  # Optional Bearer Token
-    
-    # If credentials are missing, return empty results (don't fail)
-    if not all([consumer_key, consumer_secret, access_token, access_token_secret]):
-        logging.warning("⚠️  X API credentials not available - skipping X post fetching")
-        logging.info("To enable X post fetching, set X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET")
-        return [], []
-    
-    # Try Bearer Token first if available (simpler auth, works for read-only operations)
-    x_client = None
-    if bearer_token:
-        try:
-            logging.info("Attempting X API authentication with Bearer Token...")
-            x_client = tweepy.Client(
-                bearer_token=bearer_token,
-                wait_on_rate_limit=False  # Don't block on rate limits - handle gracefully instead
-            )
-            logging.info("✅ Bearer Token client initialized")
-        except Exception as e:
-            logging.warning(f"Failed to initialize with Bearer Token: {e}")
-            x_client = None
-    
-    # Fall back to OAuth 1.0a if Bearer Token not available or failed
-    if x_client is None:
-        try:
-            logging.info("Attempting X API authentication with OAuth 1.0a...")
-            x_client = tweepy.Client(
-                consumer_key=consumer_key,
-                consumer_secret=consumer_secret,
-                access_token=access_token,
-                access_token_secret=access_token_secret,
-                wait_on_rate_limit=False  # Don't block on rate limits - handle gracefully instead
-            )
-            logging.info("✅ OAuth 1.0a client initialized")
-        except Exception as e:
-            logging.warning(f"Failed to initialize X API client: {e}")
-            logging.warning("Continuing without X posts data")
-            return [], []
-    
-    # Calculate date range (last 24 hours) - use start_time to filter at API level for efficiency
-    start_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)
-    
-    # OPTIMIZED: Single combined query instead of 3 separate queries to minimize API calls
-    optimized_query = "(Tesla OR TSLA OR \"Tesla FSD\" OR Cybertruck OR Robotaxi OR Optimus OR Model 3 OR Model Y OR Model S OR Model X) -is:retweet -is:reply lang:en"
-    
+    logging.info("Fetching Tesla posts from 30+ official + trusted accounts (incl. reposts/quotes)")
+
+    end_time = datetime.datetime.now(datetime.timezone.utc)
+    start_time = end_time - datetime.timedelta(hours=48)  # 48h = never miss weekend news
+
     all_posts = []
-    raw_tweets = []  # Initialize raw tweets list
-    
+    raw_posts = []
+
+    # 1. Original posts from trusted accounts
+    from_part = " OR ".join([f"from:{u}" for u in TRUSTED_USERNAMES])
+
+    # 2. Elon & Sawyer’s reposts/quotes (these are gold)
+    repost_quote_part = (
+        "retweets_of:elonmusk OR retweets_of:SawyerMerritt OR "
+        "quoted_user_id:44196397 OR quoted_user_id:1044758798404087808"  # Elon & Sawyer IDs
+    )
+
+    # Final query – one single free call
+    query = f"({from_part}) OR ({repost_quote_part}) -is:reply lang:en min_faves:15"
+
     try:
-        # Single optimized search query - reduces API calls from 3 to 1
-        try:
-            logging.info(f"Executing optimized single search query...")
-            # Request more results to get better selection of recent, high-engagement posts
-            # 100 results gives us better diversity and more recent posts to choose from
-            tweets = x_client.search_recent_tweets(
-                query=optimized_query,
-                max_results=100,  # Increased from 75 to get more recent posts
-                start_time=start_time,  # Filter to last 24 hours at API level for efficiency
-                tweet_fields=["created_at", "public_metrics", "author_id", "text"],
-                user_fields=["username", "name"],
-                expansions=["author_id"]
-            )
-            
-            if tweets.data:
-                # Get user data
-                if tweets.includes and hasattr(tweets.includes, 'users'):
-                    users = {user.id: user for user in tweets.includes.users}
-                elif tweets.includes and isinstance(tweets.includes, dict):
-                    users = {user.id: user for user in tweets.includes.get("users", [])}
-                else:
-                    users = {}
-                
-                logging.info(f"Processing {len(tweets.data)} tweets from optimized search...")
-                
-                for tweet in tweets.data:
-                    # Calculate engagement score (weighted)
-                    metrics = tweet.public_metrics if hasattr(tweet, 'public_metrics') else {}
-                    if hasattr(metrics, 'like_count'):
-                        # It's a metrics object
-                        like_count = getattr(metrics, 'like_count', 0)
-                        retweet_count = getattr(metrics, 'retweet_count', 0)
-                        reply_count = getattr(metrics, 'reply_count', 0)
-                        quote_count = getattr(metrics, 'quote_count', 0)
-                    else:
-                        # It's a dict
-                        like_count = metrics.get("like_count", 0) if isinstance(metrics, dict) else 0
-                        retweet_count = metrics.get("retweet_count", 0) if isinstance(metrics, dict) else 0
-                        reply_count = metrics.get("reply_count", 0) if isinstance(metrics, dict) else 0
-                        quote_count = metrics.get("quote_count", 0) if isinstance(metrics, dict) else 0
-                    
-                    # Base engagement score (weighted)
-                    base_engagement = (
-                        like_count * 1 +
-                        retweet_count * 2 +
-                        reply_count * 1.5 +
-                        quote_count * 2
-                    )
-                    
-                    # Get username
-                    author = users.get(tweet.author_id)
-                    username = author.username if author else "unknown"
-                    name = author.name if author else "Unknown"
-                    
-                    # Check if post is within last 24 hours
-                    tweet_time = tweet.created_at
-                    
-                    # Calculate recency boost (newer posts get higher score)
-                    # Posts from last 6 hours get 1.5x boost, last 12 hours get 1.2x, last 24 hours get 1.0x
-                    recency_multiplier = 1.0
-                    if tweet_time:
-                        hours_ago = (datetime.datetime.now(datetime.timezone.utc) - tweet_time).total_seconds() / 3600
-                        if hours_ago <= 6:
-                            recency_multiplier = 1.5  # Most recent posts get biggest boost
-                        elif hours_ago <= 12:
-                            recency_multiplier = 1.2  # Recent posts get moderate boost
-                        # else: 1.0 (no boost for older posts in 24h window)
-                    
-                    # Combined score: engagement * recency multiplier
-                    combined_score = base_engagement * recency_multiplier
-                    
-                    # Store raw tweet data (all tweets, not just within 24h)
-                    raw_tweet_data = {
-                        "id": str(tweet.id),
-                        "text": tweet.text,
-                        "username": username,
-                        "name": name,
-                        "url": f"https://x.com/{username}/status/{tweet.id}",
-                        "created_at": tweet_time.isoformat() if tweet_time else None,
-                        "engagement": base_engagement,
-                        "combined_score": combined_score,
-                        "likes": like_count,
-                        "retweets": retweet_count,
-                        "replies": reply_count,
-                        "quotes": quote_count
-                    }
-                    raw_tweets.append(raw_tweet_data)
-                    
-                    if tweet_time and (datetime.datetime.now(datetime.timezone.utc) - tweet_time).total_seconds() <= 86400:
-                        all_posts.append({
-                            "id": tweet.id,
-                            "text": tweet.text,
-                            "username": username,
-                            "name": name,
-                            "url": f"https://x.com/{username}/status/{tweet.id}",
-                            "created_at": tweet_time.isoformat(),
-                            "engagement": base_engagement,
-                            "combined_score": combined_score,  # Use combined score for sorting
-                            "likes": like_count,
-                            "retweets": retweet_count,
-                            "replies": reply_count
-                        })
-            else:
-                logging.warning("No tweets returned from search query")
-                
-        except tweepy.TooManyRequests as e:
-            logging.warning(f"⚠️  X API rate limit exceeded: {e}")
-            logging.warning("Continuing without X posts data (rate limit will reset later)")
-            return [], []
-        except tweepy.Unauthorized as e:
-            logging.warning(f"❌ X API Authentication failed (401 Unauthorized): {e}")
-            logging.warning("Continuing without X posts data")
-            return [], []
-        except tweepy.Forbidden as e:
-            logging.warning(f"❌ X API Forbidden (403): {e}")
-            logging.warning("Continuing without X posts data")
-            return [], []
-        except Exception as e:
-            error_msg = str(e)
-            if "429" in error_msg or "rate limit" in error_msg.lower() or "TooManyRequests" in str(type(e)):
-                logging.warning(f"⚠️  X API rate limit exceeded: {e}")
-                logging.warning("Continuing without X posts data (rate limit will reset later)")
-            elif "401" in error_msg or "Unauthorized" in error_msg:
-                logging.warning(f"❌ X API Authentication failed (401): {e}")
-                logging.warning("Continuing without X posts data")
-            else:
-                logging.warning(f"Error searching X API: {e}")
-                logging.warning("Continuing without X posts data")
-            return [], []
-        
-        # Sort by combined score (engagement * recency) to prioritize recent, high-engagement posts
-        all_posts.sort(key=lambda x: x.get("combined_score", x.get("engagement", 0)), reverse=True)
-        
-        # Remove duplicates (by tweet ID)
-        seen_ids = set()
-        unique_posts = []
-        for post in all_posts:
-            if post["id"] not in seen_ids:
-                seen_ids.add(post["id"])
-                unique_posts.append(post)
-        
-        # Remove similar/duplicate posts based on text content similarity
-        before_dedup = len(unique_posts)
-        unique_posts = remove_similar_items(
-            unique_posts,
-            similarity_threshold=0.70,  # 70% similarity = likely duplicate or very similar
-            get_text_func=lambda x: x.get("text", "")
+        response = x_keyword_search(
+            query=query,
+            limit=200,
+            from_date=start_time.strftime("%Y-%m-%d"),
+            mode="Top"          # Let X sort by virality first
         )
-        after_dedup = len(unique_posts)
-        if before_dedup != after_dedup:
-            logging.info(f"Removed {before_dedup - after_dedup} similar/duplicate X posts")
-        
-        # Get top 20 for selection
-        top_posts = unique_posts[:20]
-        logging.info(f"Fetched {len(top_posts)} unique top X posts (ranked by recency + engagement)")
-        
-        return top_posts, raw_tweets
-        
+
+        for post in response.get('data', []):
+            metrics = post.get('public_metrics', {})
+            engagement = (
+                metrics.get('like_count', 0) * 1.0 +
+                metrics.get('retweet_count', 0) * 3.0 +
+                metrics.get('reply_count', 0) * 1.2 +
+                metrics.get('quote_count', 0) * 2.5
+            )
+
+            created_at = datetime.datetime.fromisoformat(post['created_at'].replace('Z', '+00:00'))
+            hours_old = (end_time - created_at).total_seconds() / 3600
+            recency = 2.5 if hours_old <= 8 else (1.8 if hours_old <= 24 else 1.0)
+
+            author = post.get('author_username', '').lower()
+            boost = 4.0 if author == "elonmusk" else \
+                    3.0 if author in ["tesla", "tesla_ai", "cybertruck", "optimustelsa"] else \
+                    2.5 if author == "sawrymerritt" else 1.5
+
+            # Bonus if it's a repost/quote from Elon or Sawyer
+            is_signal_repost = any(ref.get('type') in ['retweeted', 'quoted'] and ref.get('author_id') in ["44196397", "1044758798404087808"]
+                                   for ref in post.get('referenced_tweets', [{}]))
+            if is_signal_repost:
+                boost *= 1.8
+
+            score = engagement * recency * boost
+
+            all_posts.append({
+                "id": post['id'],
+                "text": post['text'],
+                "username": post.get('author_username'),
+                "name": post.get('author_name'),
+                "url": f"https://x.com/{post.get('author_username')}/status/{post['id']}",
+                "created_at": post['created_at'],
+                "likes": metrics.get('like_count', 0),
+                "retweets": metrics.get('retweet_count', 0),
+                "final_score": score,
+                "is_elon_or_sawyer_repost": is_signal_repost,
+                "hours_old": round(hours_old, 1)
+            })
+
+        logging.info(f"Fetched & scored {len(all_posts)} posts from Tesla ecosystem")
+
     except Exception as e:
-        logging.warning(f"Failed to fetch X posts: {e}")
-        logging.warning("Continuing without X posts data")
+        logging.warning(f"Search failed: {e}")
         return [], []
 
-top_x_posts, raw_x_posts = fetch_top_x_posts()
+    if not all_posts:
+        return [], []
 
-# NOTE: X posts are optional - if we don't have enough, continue anyway (Grok will skip the X posts section)
-if len(top_x_posts) < 8:
-    logging.warning(f"⚠️  Only {len(top_x_posts)} X posts were fetched (minimum 8 recommended). Continuing anyway - Grok will skip X posts section if needed.")
+    # Sort + dedupe
+    all_posts.sort(key=lambda x: x['final_score'], reverse=True)
+    seen = set()
+    unique = [p for p in all_posts if p['id'] not in seen and (seen.add(p['id']) or True)]
 
+    top_25 = unique[:25]
+
+    logging.info(f"Returning {len(top_25)} best Tesla posts "
+                 f"(Elon/Sawyer reposts: {sum(1 for p in top_25 if p['is_elon_or_sawyer_repost'])})")
+
+    return top_25, raw_posts
 # ========================== SAVE RAW DATA AND GENERATE HTML PAGE ==========================
 logging.info("Saving raw data and generating HTML page for raw news and X posts...")
 
@@ -1110,8 +989,8 @@ You are an elite Tesla news curator producing the daily "Tesla Shorts Time" news
 ### MANDATORY SELECTION & COUNTS
 - **News**: Select EXACTLY 5 unique articles (if <5 available, use all). Prioritize high-quality sources; each must cover a DIFFERENT Tesla story/angle.
 - **X Posts**: Select UP TO 10 unique posts from pre-fetched list. If fewer than 10 are available, output only what exists. NEVER invent, make up, or hallucinate X post URLs - only use exact URLs from the pre-fetched list. If you cannot find enough posts, output fewer items (e.g., if only 8 posts, number them 1-8). Each must cover a DIFFERENT angle; max 3 per username.
-- **CRITICAL URL RULE**: NEVER invent X post URLs. If you don't have enough pre-fetched posts, output fewer items rather than making up URLs. All URLs must be exact matches from the pre-fetched list above.
-- **Diversity Check**: Before finalizing, verify no similar content; replace if needed from pre-fetched pool.
+- **CRITICAL URL RULE**: NEVER invent X post URLs. If you don't have enough pre-fetched posts, output fewer items rather than making up URLs. All URLs must be exact matches from the pre-fetched list above for the news and X posts.
+- **Diversity Check**: Before finalizing, verify no similar content for the news and X posts; replace if needed from pre-fetched pool for the news and X posts.
 
 ### FORMATTING (EXACT—USE MARKDOWN AS SHOWN)
 # Tesla Shorts Time
@@ -1123,13 +1002,13 @@ You are an elite Tesla news curator producing the daily "Tesla Shorts Time" news
 ### Top 5 News Items
 1. **Title (One Line): DD Month, YYYY, HH:MM AM/PM PST, Source Name**  
    2–4 sentences: Start with what happened, then why it matters for Tesla's future/stock. End with: Source: [EXACT URL FROM PRE-FETCHED—no mods]
-2. [Repeat format for 3-5; if <5 items, stop at available count]
+2. [Repeat format for 3-5; if <5 items, stop at available count, add a blank line after each item and the last item]
 
 ━━━━━━━━━━━━━━━━━━━━
 ### Top X Posts
 1. **Catchy Title: DD Month, YYYY, HH:MM AM/PM PST**  
    2–4 sentences: Explain post & significance (pro-Tesla angle). End with: Post: [EXACT URL FROM PRE-FETCHED—https://x.com/username/status/ID]
-2. [Repeat for remaining posts; use only pre-fetched posts, never invent URLs. If fewer than 10 available, output only what exists (e.g., if 8 posts, number 1-8)]
+2. [Repeat for remaining posts; use only pre-fetched posts, never invent URLs. If fewer than 10 available, output only what exists (e.g., if 8 posts, number 1-8), add a blank line after each item and the last item]
 
 ━━━━━━━━━━━━━━━━━━━━
 ## Short Spot
@@ -1139,7 +1018,8 @@ One bearish item from pre-fetched (news or X post) that's negative for Tesla/sto
 
 ━━━━━━━━━━━━━━━━━━━━
 ### Short Squeeze
-Dedicated paragraph on short-seller pain: Include current short interest %/$ value from the data provided above (use the exact values from the SHORT INTEREST DATA section). Add 2 specific failed bear predictions (2023–2025, with refs/links—vary from past). End with YTD/recent squeeze $ losses.
+Dedicated paragraph on short-seller pain:
+Add 2 specific failed bear predictions (2020–2025, with references and links from past). End with YTD/recent squeeze $ losses.
 
 ━━━━━━━━━━━━━━━━━━━━
 ### Daily Challenge
@@ -1154,7 +1034,6 @@ One short, inspiring challenge tied to Tesla/Elon themes (curiosity, first princ
 
 ### TONE & STYLE
 - Inspirational, pro-Tesla, optimistic, energetic.
-- Acknowledge challenges but frame as temporary/crushed by innovation.
 - Timestamps: Accurate PST/PDT (convert from pre-fetched).
 - No stock-quote pages/pure price commentary as "news."
 
@@ -1235,7 +1114,11 @@ if x_posts_count != 10:
     logging.warning(f"⚠️  WARNING: Found {x_posts_count} X posts instead of 10. Grok may not have followed instructions.")
 
 # ========================== VALIDATE AND FIX LINKS ==========================
-logging.info("Validating and fixing links in the generated digest...")
+# Only run if enabled (can be disabled for testing)
+if ENABLE_LINK_VALIDATION:
+    logging.info("Validating and fixing links in the generated digest...")
+else:
+    logging.info("⚠️  Link validation is DISABLED - skipping validation step")
 
 def validate_x_post_url(url: str) -> bool:
     """
@@ -1380,8 +1263,12 @@ def validate_and_fix_links(digest_text: str, news_articles: list, x_posts: list)
     
     return digest_text
 
-# Validate links
-x_thread = validate_and_fix_links(x_thread, tesla_news, top_x_posts)
+# Validate links (only if enabled)
+if ENABLE_LINK_VALIDATION:
+    x_thread = validate_and_fix_links(x_thread, tesla_news, top_x_posts)
+    logging.info("✅ Link validation completed")
+else:
+    logging.info("⚠️  Link validation skipped (ENABLE_LINK_VALIDATION = False)")
 
 # ========================== STEP 4: FORMAT DIGEST FOR BEAUTIFUL X POST ==========================
 logging.info("Step 4: Formatting digest for beautiful X post...")
@@ -1788,50 +1675,161 @@ def update_rss_feed(
     mp3_path: Path,
     base_url: str = "https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main"
 ):
-    """Update or create RSS feed with new episode using feedgen (clean, no namespace hell)."""
+    """Update or create RSS feed with new episode, preserving all existing episodes."""
     fg = FeedGenerator()
     fg.load_extension('podcast')
     
-    # Load existing feed if it exists
+    # Parse existing RSS feed to preserve all episodes
+    existing_episodes = []
+    channel_metadata = {}
+    
     if rss_path.exists():
         try:
-            fg.rss_file(str(rss_path))
+            # Parse existing RSS XML
+            tree = ET.parse(str(rss_path))
+            root = tree.getroot()
+            
+            # Extract channel metadata
+            channel = root.find('channel')
+            if channel is not None:
+                for elem in channel:
+                    if elem.tag in ['title', 'link', 'description', 'language', 'copyright']:
+                        channel_metadata[elem.tag] = elem.text
+                    elif elem.tag == '{http://www.itunes.com/dtds/podcast-1.0.dtd}author':
+                        channel_metadata['itunes_author'] = elem.text
+                    elif elem.tag == '{http://www.itunes.com/dtds/podcast-1.0.dtd}summary':
+                        channel_metadata['itunes_summary'] = elem.text
+                    elif elem.tag == '{http://www.itunes.com/dtds/podcast-1.0.dtd}owner':
+                        name_elem = elem.find('{http://www.itunes.com/dtds/podcast-1.0.dtd}name')
+                        email_elem = elem.find('{http://www.itunes.com/dtds/podcast-1.0.dtd}email')
+                        if name_elem is not None and email_elem is not None:
+                            channel_metadata['itunes_owner'] = {'name': name_elem.text, 'email': email_elem.text}
+                    elif elem.tag == '{http://www.itunes.com/dtds/podcast-1.0.dtd}image':
+                        channel_metadata['itunes_image'] = elem.get('href')
+                    elif elem.tag == '{http://www.itunes.com/dtds/podcast-1.0.dtd}category':
+                        channel_metadata['itunes_category'] = elem.get('text')
+                
+                # Extract all existing episodes
+                items = channel.findall('item')
+                for item in items:
+                    episode_data = {}
+                    for elem in item:
+                        if elem.tag == 'title':
+                            episode_data['title'] = elem.text or ''
+                        elif elem.tag == 'description':
+                            episode_data['description'] = elem.text or ''
+                        elif elem.tag == 'link':
+                            episode_data['link'] = elem.text or ''
+                        elif elem.tag == 'guid':
+                            # GUID is typically the text content
+                            if elem.text:
+                                episode_data['guid'] = elem.text.strip()
+                            # Some feeds might use guid as an attribute, but we'll use text primarily
+                        elif elem.tag == 'pubDate':
+                            episode_data['pubDate'] = elem.text or ''
+                        elif elem.tag == 'enclosure':
+                            episode_data['enclosure'] = {
+                                'url': elem.get('url', ''),
+                                'type': elem.get('type', 'audio/mpeg'),
+                                'length': elem.get('length', '0')
+                            }
+                        elif elem.tag == '{http://www.itunes.com/dtds/podcast-1.0.dtd}title':
+                            episode_data['itunes_title'] = elem.text or ''
+                        elif elem.tag == '{http://www.itunes.com/dtds/podcast-1.0.dtd}summary':
+                            episode_data['itunes_summary'] = elem.text or ''
+                        elif elem.tag == '{http://www.itunes.com/dtds/podcast-1.0.dtd}duration':
+                            episode_data['itunes_duration'] = elem.text or ''
+                        elif elem.tag == '{http://www.itunes.com/dtds/podcast-1.0.dtd}episode':
+                            episode_data['itunes_episode'] = elem.text or ''
+                        elif elem.tag == '{http://www.itunes.com/dtds/podcast-1.0.dtd}season':
+                            episode_data['itunes_season'] = elem.text or ''
+                        elif elem.tag == '{http://www.itunes.com/dtds/podcast-1.0.dtd}episodeType':
+                            episode_data['itunes_episode_type'] = elem.text or ''
+                        elif elem.tag == '{http://www.itunes.com/dtds/podcast-1.0.dtd}image':
+                            episode_data['itunes_image'] = elem.get('href', '')
+                    
+                    if episode_data.get('guid'):
+                        existing_episodes.append(episode_data)
+            
+            logging.info(f"Loaded {len(existing_episodes)} existing episodes from RSS feed")
         except Exception as e:
-            logging.warning(f"Could not load existing RSS feed: {e}, creating new one")
-            fg = FeedGenerator()
-            fg.load_extension('podcast')
+            logging.warning(f"Could not parse existing RSS feed: {e}, creating new one")
+            existing_episodes = []
     
-    # Set channel metadata (only if new feed)
-    if not fg.title():
-        fg.title("Tesla Shorts Time Daily")
-        fg.link(href="https://github.com/patricknovak/Tesla-shorts-time")
-        fg.description("Daily Tesla news digest and podcast hosted by Patrick in Vancouver. Covering the latest Tesla developments, stock updates, and short squeeze celebrations.")
-        fg.language("en-us")
-        fg.copyright(f"Copyright {datetime.date.today().year}")
-        fg.podcast.itunes_author("Patrick")
-        fg.podcast.itunes_summary("Daily Tesla news digest and podcast covering the latest developments, stock updates, and short squeeze celebrations.")
-        fg.podcast.itunes_owner(name="Patrick", email="contact@teslashortstime.com")
-        fg.podcast.itunes_image(f"{base_url}/podcast-image.jpg")
-        fg.podcast.itunes_category("Technology")
-        fg.podcast.itunes_explicit("no")
+    # Set channel metadata
+    fg.title(channel_metadata.get('title', "Tesla Shorts Time Daily"))
+    fg.link(href=channel_metadata.get('link', "https://github.com/patricknovak/Tesla-shorts-time"))
+    fg.description(channel_metadata.get('description', "Daily Tesla news digest and podcast hosted by Patrick in Vancouver. Covering the latest Tesla developments, stock updates, and short squeeze celebrations."))
+    fg.language(channel_metadata.get('language', 'en-us'))
+    fg.copyright(channel_metadata.get('copyright', f"Copyright {datetime.date.today().year}"))
+    fg.podcast.itunes_author(channel_metadata.get('itunes_author', "Patrick"))
+    fg.podcast.itunes_summary(channel_metadata.get('itunes_summary', "Daily Tesla news digest and podcast covering the latest developments, stock updates, and short squeeze celebrations."))
     
-    # Check if episode already exists
+    owner = channel_metadata.get('itunes_owner', {'name': 'Patrick', 'email': 'contact@teslashortstime.com'})
+    fg.podcast.itunes_owner(name=owner.get('name', 'Patrick'), email=owner.get('email', 'contact@teslashortstime.com'))
+    
+    # Set image URL - ensure it's properly formatted for Apple Podcasts Connect
+    image_url = channel_metadata.get('itunes_image', f"{base_url}/podcast-image.jpg")
+    fg.podcast.itunes_image(image_url)
+    
+    category = channel_metadata.get('itunes_category', 'Technology')
+    fg.podcast.itunes_category(category)
+    fg.podcast.itunes_explicit("no")
+    
+    # Add all existing episodes (except the one we're updating)
     episode_guid = f"tesla-shorts-time-ep{episode_num:03d}-{episode_date:%Y%m%d}"
-    existing_entry = None
-    for entry in fg.entry():
-        if entry.id() == episode_guid:
-            existing_entry = entry
-            break
+    episode_updated = False
     
-    # Create or update episode
-    if existing_entry:
-        entry = existing_entry
-        logging.info(f"Updating existing episode {episode_num} in RSS feed")
-    else:
+    for ep_data in existing_episodes:
+        if ep_data.get('guid') == episode_guid:
+            # Skip the episode we're about to update
+            episode_updated = True
+            continue
+        
+        # Re-add existing episode
         entry = fg.add_entry()
-        entry.id(episode_guid)
+        entry.id(ep_data.get('guid', ''))
+        entry.title(ep_data.get('title', ''))
+        entry.description(ep_data.get('description', ''))
+        if ep_data.get('link'):
+            entry.link(href=ep_data['link'])
+        
+        # Parse and set pubDate
+        if ep_data.get('pubDate'):
+            try:
+                from email.utils import parsedate_to_datetime
+                pub_date = parsedate_to_datetime(ep_data['pubDate'])
+                entry.pubDate(pub_date)
+            except Exception:
+                pass
+        
+        # Set enclosure
+        if ep_data.get('enclosure'):
+            enc = ep_data['enclosure']
+            entry.enclosure(url=enc.get('url', ''), type=enc.get('type', 'audio/mpeg'), length=enc.get('length', '0'))
+        
+        # Set iTunes tags
+        if ep_data.get('itunes_title'):
+            entry.podcast.itunes_title(ep_data['itunes_title'])
+        if ep_data.get('itunes_summary'):
+            entry.podcast.itunes_summary(ep_data['itunes_summary'])
+        if ep_data.get('itunes_duration'):
+            entry.podcast.itunes_duration(ep_data['itunes_duration'])
+        if ep_data.get('itunes_episode'):
+            entry.podcast.itunes_episode(ep_data['itunes_episode'])
+        if ep_data.get('itunes_season'):
+            entry.podcast.itunes_season(ep_data['itunes_season'])
+        if ep_data.get('itunes_episode_type'):
+            entry.podcast.itunes_episode_type(ep_data['itunes_episode_type'])
+        entry.podcast.itunes_explicit("no")
+        # Set image for each episode (Apple Podcasts Connect requirement)
+        # Use episode-specific image if available, otherwise use channel image
+        episode_image = ep_data.get('itunes_image', image_url)
+        entry.podcast.itunes_image(episode_image)
     
-    # Set episode data
+    # Add or update the new episode
+    entry = fg.add_entry()
+    entry.id(episode_guid)
     entry.title(episode_title)
     entry.description(episode_description)
     entry.link(href=f"{base_url}/digests/{mp3_filename}")
@@ -1851,14 +1849,16 @@ def update_rss_feed(
     entry.podcast.itunes_season("1")
     entry.podcast.itunes_episode_type("full")
     entry.podcast.itunes_explicit("no")
-    entry.podcast.itunes_image(f"{base_url}/podcast-image.jpg")
+    # Set image for the episode (Apple Podcasts Connect requirement)
+    entry.podcast.itunes_image(image_url)
     
     # Update lastBuildDate
     fg.lastBuildDate(datetime.datetime.now(datetime.timezone.utc))
     
     # Write RSS feed
     fg.rss_file(str(rss_path), pretty=True)
-    logging.info(f"RSS feed updated → {rss_path} ({len(fg.entry())} episode(s))")
+    total_episodes = len(fg.entry())
+    logging.info(f"RSS feed updated → {rss_path} ({total_episodes} episode(s) total)")
 
 # Since there's only one voice (Patrick), combine entire script into one segment
 # Remove speaker labels and sound cues, keep only the actual spoken text
