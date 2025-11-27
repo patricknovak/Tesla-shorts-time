@@ -1520,6 +1520,7 @@ def format_digest_for_x(digest: str) -> str:
     return formatted
 
 # Format the digest
+podcast_link = '🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939'
 x_thread_formatted = format_digest_for_x(x_thread)
 x_thread_formatted = podcast_link + "\n\n" + x_thread_formatted   
 logging.info(f"Digest formatted for X ({len(x_thread_formatted)} characters)")
