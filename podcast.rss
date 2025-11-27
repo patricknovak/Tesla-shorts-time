@@ -18,21 +18,5 @@
       <itunes:email>contact@teslashortstime.com</itunes:email>
     </itunes:owner>
     <itunes:summary>Daily Tesla news digest and podcast covering the latest developments, stock updates, and short squeeze celebrations.</itunes:summary>
-    <item>
-      <title>Tesla Shorts Time Daily - Episode 331 - November 27, 2025</title>
-      <link>https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/digests/Tesla_Shorts_Time_Pod_Ep331_20251127.mp3</link>
-      <description>Daily Tesla news digest for November 27, 2025. TSLA price: $426.58 +7.18 (+1.71%)  (After-hours). 1. **Tesla Giveaway Buzz Ignites Fan Excitement: 26 November, 2025, 4:19 PM PST**...</description>
-      <guid isPermaLink="false">tesla-shorts-time-ep331-20251127</guid>
-      <enclosure url="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/digests/Tesla_Shorts_Time_Pod_Ep331_20251127.mp3" length="13268576" type="audio/mpeg"/>
-      <pubDate>Thu, 27 Nov 2025 08:00:00 +0000</pubDate>
-      <itunes:image href="https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main/podcast-image.jpg"/>
-      <itunes:duration>09:12</itunes:duration>
-      <itunes:explicit>no</itunes:explicit>
-      <itunes:summary>Daily Tesla news digest for November 27, 2025. TSLA price: $426.58 +7.18 (+1.71%)  (After-hours). 1. **Tesla Giveaway Buzz Ignites Fan Excitement: 26 November, 2025, 4:19 PM PST**...</itunes:summary>
-      <itunes:season>1</itunes:season>
-      <itunes:episode>331</itunes:episode>
-      <itunes:title>Tesla Shorts Time Daily - Episode 331 - November 27, 2025</itunes:title>
-      <itunes:episodeType>full</itunes:episodeType>
-    </item>
   </channel>
 </rss>
