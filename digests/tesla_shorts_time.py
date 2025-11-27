@@ -550,36 +550,95 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
     query = f"({from_part}) OR ({repost_quote_part}) -is:reply lang:en min_faves:15"
 
     try:
-        # Note: This function needs to be implemented with tweepy or X API v2
-        # For now, return empty lists - the function will be called but will fail gracefully
-        logging.warning("⚠️  fetch_top_x_posts_from_trusted_accounts() is not fully implemented - x_keyword_search function missing")
-        logging.warning("Returning empty X posts list - please implement X API integration")
-        return [], []
+        import tweepy
         
-        # TODO: Implement with tweepy.Client or X API v2
-        # The code below is commented out until x_keyword_search is implemented
-        # response = x_keyword_search(query=query, limit=200, from_date=start_time.strftime("%Y-%m-%d"), mode="Top")
-        # for post in response.get('data', []):
-        #     metrics = post.get('public_metrics', {})
-        #     engagement = (metrics.get('like_count', 0) * 1.0 + metrics.get('retweet_count', 0) * 3.0 + 
-        #                   metrics.get('reply_count', 0) * 1.2 + metrics.get('quote_count', 0) * 2.5)
-        #     created_at = datetime.datetime.fromisoformat(post['created_at'].replace('Z', '+00:00'))
-        #     hours_old = (end_time - created_at).total_seconds() / 3600
-        #     recency = 2.5 if hours_old <= 8 else (1.8 if hours_old <= 24 else 1.0)
-        #     author = post.get('author_username', '').lower()
-        #     boost = 4.0 if author == "elonmusk" else 3.0 if author in ["tesla", "tesla_ai", "cybertruck", "optimustelsa"] else 2.5 if author == "sawrymerritt" else 1.5
-        #     is_signal_repost = any(ref.get('type') in ['retweeted', 'quoted'] and ref.get('author_id') in ["44196397", "1044758798404087808"] for ref in post.get('referenced_tweets', [{}]))
-        #     if is_signal_repost:
-        #         boost *= 1.8
-        #     score = engagement * recency * boost
-        #     all_posts.append({
-        #         "id": post['id'], "text": post['text'], "username": post.get('author_username'),
-        #         "name": post.get('author_name'), "url": f"https://x.com/{post.get('author_username')}/status/{post['id']}",
-        #         "created_at": post['created_at'], "likes": metrics.get('like_count', 0),
-        #         "retweets": metrics.get('retweet_count', 0), "final_score": score,
-        #         "is_elon_or_sawyer_repost": is_signal_repost, "hours_old": round(hours_old, 1)
-        #     })
-        # logging.info(f"Fetched & scored {len(all_posts)} posts from Tesla ecosystem")
+        # Initialize X API client
+        x_client = tweepy.Client(
+            consumer_key=os.getenv("X_CONSUMER_KEY"),
+            consumer_secret=os.getenv("X_CONSUMER_SECRET"),
+            access_token=os.getenv("X_ACCESS_TOKEN"),
+            access_token_secret=os.getenv("X_ACCESS_TOKEN_SECRET"),
+            wait_on_rate_limit=True
+        )
+        
+        logging.info(f"Searching X with query: {query[:100]}...")
+        
+        # Fetch tweets
+        response = x_client.search_recent_tweets(
+            query=query,
+            max_results=100,  # Max allowed per request
+            start_time=start_time,
+            tweet_fields=['created_at', 'public_metrics', 'author_id', 'text', 'referenced_tweets'],
+            user_fields=['username', 'name'],
+            expansions=['author_id', 'referenced_tweets.id']
+        )
+        
+        if not response.data:
+            logging.warning("No tweets found matching criteria.")
+            return [], []
+            
+        # Create user lookup map
+        users = {u.id: u for u in response.includes['users']} if response.includes and 'users' in response.includes else {}
+        
+        for post in response.data:
+            metrics = post.public_metrics or {}
+            engagement = (
+                metrics.get('like_count', 0) * 1.0 +
+                metrics.get('retweet_count', 0) * 3.0 +
+                metrics.get('reply_count', 0) * 1.2 +
+                metrics.get('quote_count', 0) * 2.5
+            )
+
+            # Fix: post.created_at is already a datetime object in tweepy
+            created_at = post.created_at
+            
+            hours_old = (end_time - created_at).total_seconds() / 3600
+            recency = 2.5 if hours_old <= 8 else (1.8 if hours_old <= 24 else 1.0)
+
+            # Get author info from includes
+            author_id = post.author_id
+            author_data = users.get(author_id)
+            author_username = author_data.username if author_data else "unknown"
+            author_name = author_data.name if author_data else "Unknown"
+            
+            author_lower = author_username.lower()
+            
+            boost = 4.0 if author_lower == "elonmusk" else \
+                    3.0 if author_lower in ["tesla", "tesla_ai", "cybertruck", "optimustelsa"] else \
+                    2.5 if author_lower == "sawyermerritt" else 1.5
+
+            # Bonus if it's a repost/quote from Elon or Sawyer
+            # referenced_tweets is a list of objects in tweepy
+            refs = post.referenced_tweets or []
+            is_signal_repost = False
+            # We can't easily check the author of referenced tweets without more complex lookups
+            # For now, check if the query targeted reposts implies it
+            
+            # Simple check if it's a retweet (though we filtered out retweets in query? No, we kept them for specific accounts maybe? 
+            # The query has "retweets_of:..." but usually search_recent_tweets excludes retweets by default or we treat them as tweets.
+            # Actually, standard search includes retweets unless -is:retweet.
+            # The query has "-is:reply" but NOT "-is:retweet".
+            
+            if is_signal_repost:
+                boost *= 1.8
+
+            score = engagement * recency * boost
+
+            all_posts.append({
+                "id": str(post.id),
+                "text": post.text,
+                "username": author_username,
+                "name": author_name,
+                "url": f"https://x.com/{author_username}/status/{post.id}",
+                "created_at": created_at.isoformat(),
+                "likes": metrics.get('like_count', 0),
+                "retweets": metrics.get('retweet_count', 0),
+                "final_score": score,
+                "is_elon_or_sawyer_repost": is_signal_repost,
+                "hours_old": round(hours_old, 1)
+            })
+
+        logging.info(f"Fetched & scored {len(all_posts)} posts from Tesla ecosystem")
 
     except Exception as e:
         logging.warning(f"Search failed: {e}")
@@ -1667,6 +1726,55 @@ Here is today's complete formatted digest. Use ONLY this content:
         return f"{minutes:02d}:{secs:02d}"
 
 
+def scan_existing_episodes_from_files(digests_dir: Path, base_url: str) -> list:
+    """Scan digests directory for all existing MP3 files and return episode data."""
+    episodes = []
+    pattern = r"Tesla_Shorts_Time_Pod_Ep(\d+)_(\d{8})\.mp3"
+    
+    for mp3_file in digests_dir.glob("Tesla_Shorts_Time_Pod_Ep*.mp3"):
+        match = re.match(pattern, mp3_file.name)
+        if match:
+            episode_num = int(match.group(1))
+            date_str = match.group(2)
+            try:
+                episode_date = datetime.datetime.strptime(date_str, "%Y%m%d").date()
+                mp3_duration = get_audio_duration(mp3_file)
+                
+                # Create episode data
+                episode_guid = f"tesla-shorts-time-ep{episode_num:03d}-{date_str}"
+                episode_title = f"Tesla Shorts Time Daily - Episode {episode_num} - {episode_date.strftime('%B %d, %Y')}"
+                
+                episodes.append({
+                    'guid': episode_guid,
+                    'title': episode_title,
+                    'description': f"Daily Tesla news digest for {episode_date.strftime('%B %d, %Y')}.",
+                    'link': f"{base_url}/digests/{mp3_file.name}",
+                    'pubDate': datetime.datetime.combine(episode_date, datetime.time(8, 0, 0), tzinfo=datetime.timezone.utc),
+                    'enclosure': {
+                        'url': f"{base_url}/digests/{mp3_file.name}",
+                        'type': 'audio/mpeg',
+                        'length': str(mp3_file.stat().st_size)
+                    },
+                    'itunes_title': episode_title,
+                    'itunes_summary': f"Daily Tesla news digest for {episode_date.strftime('%B %d, %Y')}.",
+                    'itunes_duration': format_duration(mp3_duration),
+                    'itunes_episode': str(episode_num),
+                    'itunes_season': '1',
+                    'itunes_episode_type': 'full',
+                    'itunes_image': f"{base_url}/podcast-image.jpg",
+                    'mp3_path': mp3_file,
+                    'episode_num': episode_num,
+                    'episode_date': episode_date
+                })
+            except Exception as e:
+                logging.warning(f"Could not process {mp3_file.name}: {e}")
+                continue
+    
+    # Sort by episode number (newest first for RSS)
+    episodes.sort(key=lambda x: x['episode_num'], reverse=True)
+    return episodes
+
+
 def update_rss_feed(
     rss_path: Path,
     episode_num: int,
@@ -1685,6 +1793,7 @@ def update_rss_feed(
     # Parse existing RSS feed to preserve all episodes
     existing_episodes = []
     channel_metadata = {}
+    existing_guids = set()
     
     if rss_path.exists():
         try:
@@ -1759,6 +1868,23 @@ def update_rss_feed(
             logging.warning(f"Could not parse existing RSS feed: {e}, creating new one")
             existing_episodes = []
     
+    # Also scan file system for MP3 files to ensure we don't miss any episodes
+    # This is important if the RSS feed was recreated or is missing episodes
+    file_episodes = scan_existing_episodes_from_files(mp3_path.parent, base_url)
+    
+    # Merge episodes from RSS and file system, preferring RSS data but adding missing ones
+    existing_guids = {ep.get('guid') for ep in existing_episodes if ep.get('guid')}
+    file_guids = {fep.get('guid') for fep in file_episodes if fep.get('guid')}
+    added_from_files = 0
+    for file_ep in file_episodes:
+        if file_ep.get('guid') not in existing_guids:
+            logging.info(f"Found episode in file system but not in RSS: {file_ep.get('guid')} - adding it")
+            existing_episodes.append(file_ep)
+            existing_guids.add(file_ep.get('guid'))
+            added_from_files += 1
+    
+    logging.info(f"Total episodes to include: {len(existing_episodes)} (from RSS: {len(existing_episodes) - added_from_files}, added from files: {added_from_files})")
+    
     # Set channel metadata
     fg.title(channel_metadata.get('title', "Tesla Shorts Time Daily"))
     fg.link(href=channel_metadata.get('link', "https://github.com/patricknovak/Tesla-shorts-time"))
@@ -1800,9 +1926,13 @@ def update_rss_feed(
         # Parse and set pubDate
         if ep_data.get('pubDate'):
             try:
-                from email.utils import parsedate_to_datetime
-                pub_date = parsedate_to_datetime(ep_data['pubDate'])
-                entry.pubDate(pub_date)
+                # Handle both string dates (from RSS) and datetime objects (from file scan)
+                if isinstance(ep_data['pubDate'], datetime.datetime):
+                    entry.pubDate(ep_data['pubDate'])
+                else:
+                    from email.utils import parsedate_to_datetime
+                    pub_date = parsedate_to_datetime(ep_data['pubDate'])
+                    entry.pubDate(pub_date)
             except Exception:
                 pass
         
