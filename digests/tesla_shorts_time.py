@@ -46,8 +46,9 @@ ENABLE_X_POSTING = True
 # Set to False to disable podcast generation and RSS feed updates
 ENABLE_PODCAST = True
 
-# Set to False to disable link validation (useful for testing if validation is necessary)
-ENABLE_LINK_VALIDATION = False  # Set to False to skip link validation
+# Link validation is currently disabled - validation functions have been removed
+# Set to True and re-implement validation functions if needed in the future
+ENABLE_LINK_VALIDATION = False
 
 
 # ========================== PRONUNCIATION FIXER v2 – NEVER BREAKS NORMAL WORDS ==========================
@@ -387,9 +388,6 @@ tesla_news, raw_news_articles = fetch_tesla_news()
 # Initialize variables at module level to ensure they're always defined
 top_x_posts = []
 raw_x_posts = []
-import datetime
-import logging
-from typing import List, Dict, Any
 
 TRUSTED_USERNAMES = [
     "elonmusk", "Tesla", "Tesla_AI", "cybertruck", "TeslaCharging", "teslaenergy",
@@ -1184,161 +1182,8 @@ if x_posts_count != 10:
     logging.warning(f"⚠️  WARNING: Found {x_posts_count} X posts instead of 10. Grok may not have followed instructions.")
 
 # ========================== VALIDATE AND FIX LINKS ==========================
-# Only run if enabled (can be disabled for testing)
-if ENABLE_LINK_VALIDATION:
-    logging.info("Validating and fixing links in the generated digest...")
-else:
-    logging.info("⚠️  Link validation is DISABLED - skipping validation step")
-
-def validate_x_post_url(url: str) -> bool:
-    """
-    Validate that an X post URL is in the correct format and appears to be real.
-    Format: https://x.com/username/status/ID or https://twitter.com/username/status/ID
-    Returns True if valid, False otherwise.
-    """
-    import re
-    
-    # Clean URL - remove markdown link syntax if present
-    url_clean = url.rstrip('.,;:!?)').strip()
-    # Remove markdown link syntax like ](url or ](https://... if it got included
-    url_clean = re.sub(r'\]\(.*$', '', url_clean).strip()
-    # Remove any trailing brackets or parentheses that might be from markdown
-    url_clean = url_clean.rstrip('])').strip()
-    
-    # Check format: https://x.com/username/status/ID or https://twitter.com/username/status/ID
-    x_pattern = r'https?://(x\.com|twitter\.com)/([a-zA-Z0-9_]+)/status/(\d+)'
-    match = re.match(x_pattern, url_clean)
-    
-    if not match:
-        return False
-    
-    # Extract components
-    domain, username, status_id = match.groups()
-    
-    # Validate username (X usernames are 1-15 alphanumeric/underscore)
-    if not re.match(r'^[a-zA-Z0-9_]{1,15}$', username):
-        return False
-    
-    # Validate status ID (should be numeric, typically 19-20 digits)
-    if not re.match(r'^\d{15,20}$', status_id):
-        return False
-    
-    # Check for suspicious patterns - real X status IDs are usually not round numbers
-    # Status IDs ending in many zeros are likely fake
-    if status_id.endswith('0000000000') or status_id.endswith('000000000'):
-        logging.warning(f"⚠️  Suspicious X post URL with round number status ID: {url_clean}")
-        return False
-    
-    return True
-
-def validate_and_fix_links(digest_text: str, news_articles: list, x_posts: list) -> str:
-    """
-    Validate all URLs in the digest and remove invalid ones.
-    CRITICAL: Only accepts URLs from pre-fetched data. All other URLs are removed.
-    Returns the corrected digest text with invalid URLs removed.
-    """
-    import re
-    
-    # We always require pre-fetched X posts (minimum 8), so this should always be True
-    has_prefetched_x_posts = len(x_posts) > 0
-    
-    # Create URL mapping from pre-fetched data
-    news_url_map = {}
-    for article in news_articles:
-        title_key = article.get('title', '').lower().strip()[:50]  # First 50 chars of title
-        news_url_map[title_key] = article.get('url', '')
-        # Also map by source name
-        source_key = article.get('source', '').lower().strip()
-        if source_key:
-            news_url_map[source_key] = article.get('url', '')
-    
-    x_url_map = {}
-    for post in x_posts:
-        username_key = post.get('username', '').lower().strip()
-        x_url_map[username_key] = post.get('url', '')
-        # Also map by post text snippet
-        text_snippet = post.get('text', '').lower().strip()[:50]
-        if text_snippet:
-            x_url_map[text_snippet] = post.get('url', '')
-    
-    # Find all URLs in the digest
-    # Also handle markdown link syntax like [text](url)
-    url_pattern = r'https?://[^\s\)\]]+'
-    urls_found = re.findall(url_pattern, digest_text)
-    
-    # Also find markdown links and extract the URL part
-    markdown_link_pattern = r'\[([^\]]+)\]\((https?://[^\s\)]+)\)'
-    markdown_links = re.findall(markdown_link_pattern, digest_text)
-    for text, url in markdown_links:
-        if url not in urls_found:
-            urls_found.append(url)
-    
-    # Track issues
-    invalid_urls = []
-    removed_count = 0
-    
-    # Check each URL
-    for url in urls_found:
-        url_clean = url.rstrip('.,;:!?)')
-        
-        # Skip known good URLs
-        if any(skip in url_clean for skip in ['podcasts.apple.com', 'teslashortstime.com', 'x.com/teslashortstime']):
-            continue
-        
-        # Check if URL is in pre-fetched data
-        is_valid = False
-        
-        # Check news articles
-        for article in news_articles:
-            if url_clean == article.get('url', ''):
-                is_valid = True
-                break
-        
-        # Check X posts - we always require pre-fetched ones (minimum 8)
-        if not is_valid:
-            for post in x_posts:
-                if url_clean == post.get('url', ''):
-                    is_valid = True
-                    break
-        
-        # CRITICAL: Only accept URLs from pre-fetched data. Reject everything else.
-        # Since we always require at least 8 pre-fetched X posts, we should never reach here
-        # for X post URLs, but if we do, reject them.
-        if not is_valid:
-            if 'x.com' in url_clean or 'twitter.com' in url_clean:
-                logging.warning(f"❌ X post URL not found in pre-fetched data - removing: {url_clean}")
-            else:
-                logging.warning(f"❌ URL not found in pre-fetched data - removing: {url_clean}")
-        
-        # If still not valid, mark for removal
-        if not is_valid:
-            invalid_urls.append(url_clean)
-            # Remove the invalid URL from the digest
-            # Remove URL and any trailing punctuation
-            url_pattern_escaped = re.escape(url_clean)
-            # Remove URL with optional trailing punctuation
-            digest_text = re.sub(url_pattern_escaped + r'[.,;:!?)]*', '[URL REMOVED - INVALID]', digest_text)
-            removed_count += 1
-    
-    if invalid_urls:
-        logging.warning(f"⚠️  Found and removed {removed_count} invalid URLs from digest")
-        logging.warning(f"Invalid URLs removed: {invalid_urls[:10]}...")  # Log first 10
-        
-        # Count X post URLs in the digest to check if we removed too many
-        x_url_count = len([url for url in invalid_urls if 'x.com' in url or 'twitter.com' in url])
-        if x_url_count > 5:
-            logging.error(f"❌ WARNING: Removed {x_url_count} invalid X post URLs. This suggests hallucinations. The digest may have fewer X posts than expected.")
-    else:
-        logging.info("✅ All URLs validated successfully")
-    
-    return digest_text
-
-# Validate links (only if enabled)
-if ENABLE_LINK_VALIDATION:
-    x_thread = validate_and_fix_links(x_thread, tesla_news, top_x_posts)
-    logging.info("✅ Link validation completed")
-else:
-    logging.info("⚠️  Link validation skipped (ENABLE_LINK_VALIDATION = False)")
+# Link validation functions removed - disabled via ENABLE_LINK_VALIDATION = False
+# If validation is needed in the future, set ENABLE_LINK_VALIDATION = True and re-implement
 
 # ========================== STEP 4: FORMAT DIGEST FOR BEAUTIFUL X POST ==========================
 logging.info("Step 4: Formatting digest for beautiful X post...")
@@ -2271,7 +2116,6 @@ if ENABLE_PODCAST and not TEST_MODE and final_mp3 and final_mp3.exists():
         
         # Define base_url for RSS feed
         base_url = "https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main"
-        episode_image_url = f"{base_url}/digests/{thumbnail_filename}"
         
         # Update RSS feed
         update_rss_feed(
