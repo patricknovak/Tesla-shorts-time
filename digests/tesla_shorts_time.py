@@ -25,6 +25,8 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 from bs4 import BeautifulSoup
 from zoneinfo import ZoneInfo
 from PIL import Image, ImageDraw, ImageFont
+import feedparser
+from typing import List, Dict, Any
 
 # ========================== LOGGING ==========================
 logging.basicConfig(
@@ -512,14 +514,8 @@ import logging
 from typing import List, Dict, Any
 
 TRUSTED_USERNAMES = [
-    # Official
     "elonmusk", "Tesla", "Tesla_AI", "cybertruck", "TeslaCharging", "teslaenergy",
-    "OptimusTesla", "GigaTexas", "GigaBerlin", "GigaShanghai", "TeslaSolar",
-    "tesla_na", "teslaeurope", "Tesla_Asia", "Tesla_Japan", "Tesla_AUNZ",
-    # Community kings
-    "SawyerMerritt", "WholeMarsBlog", "TeslaRaj", "TroyTeslike", "herbertong",
-    "BLKMDL3", "DirtyTesla", "outofspecreviews", "tesladailypodcast", "ElectricKiwi",
-    "JeffTutorials", "ChuckCookFSD", "AIDRIVR", "tesla_archive"
+    "OptimusTesla", "GigaTexas", "GigaBerlin", "SawyerMerritt"
 ]
 
 def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
@@ -539,16 +535,9 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
     raw_posts = []
 
     # 1. Original posts from trusted accounts
-    from_part = " OR ".join([f"from:{u}" for u in TRUSTED_USERNAMES])
-
-    # 2. Elon & Sawyer's reposts/quotes (these are gold)
-    repost_quote_part = (
-        "retweets_of:elonmusk OR retweets_of:SawyerMerritt OR "
-        "quoted_user_id:44196397 OR quoted_user_id:1044758798404087808"  # Elon & Sawyer IDs
-    )
-
-    # Final query – one single free call
-    query = f"({from_part}) OR ({repost_quote_part}) -is:reply lang:en min_faves:15"
+    from_part = " OR ".join([f"from:{u}" for u in TRUSTED_USERNAMES if u.isalnum()])
+    repost_part = "retweets_of:elonmusk OR retweets_of:SawyerMerritt"
+    query = f"({from_part}) OR ({repost_part}) -is:reply lang:en"
 
     try:
         import tweepy
@@ -631,6 +620,7 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
                 "created_at": created_at.isoformat(),
                 "likes": metrics.get('like_count', 0),
                 "retweets": metrics.get('retweet_count', 0),
+                "replies": metrics.get('reply_count', 0),
                 "final_score": score,
                 "is_elon_or_sawyer_repost": is_signal_repost,
                 "hours_old": round(hours_old, 1)
@@ -957,7 +947,7 @@ def generate_raw_data_html(raw_data, output_dir):
         engagement = post.get("engagement", 0)
         likes = post.get("likes", 0)
         retweets = post.get("retweets", 0)
-        replies = post.get("replies", 0)
+        replies = post.get("reply_count", 0)
         
         html_content += f"""            <div class="post">
                 <div class="post-text">{i}. {text}</div>
@@ -1015,7 +1005,7 @@ if top_x_posts:
     x_posts_section += f"**IMPORTANT: You have {len(top_x_posts)} pre-fetched X posts available. Select UP TO 10 from these pre-fetched posts. If you have fewer than 10, output only what exists. NEVER invent, make up, or hallucinate X post URLs - only use the exact URLs provided below. If you cannot find enough posts, output fewer items rather than inventing URLs.**\n\n"
     for i, post in enumerate(top_x_posts[:num_posts_to_include], 1):  # Include up to 20 posts
         x_posts_section += f"{i}. **@{post['username']} ({post['name']})**\n"
-        x_posts_section += f"   Engagement Score: {post['engagement']:.0f} (Likes: {post['likes']}, RTs: {post['retweets']}, Replies: {post['replies']})\n"
+        x_posts_section += f"   Likes: {post['likes']}, RTs: {post['retweets']}\n"
         x_posts_section += f"   Posted: {post['created_at']}\n"
         x_posts_section += f"   Text: {post['text'][:300]}...\n"
         x_posts_section += f"   URL: {post['url']}\n\n"
@@ -1591,7 +1581,7 @@ else:
     # Simplified podcast prompt - use only the final formatted digest
     POD_PROMPT = f"""You are writing an 8–11 minute (1950–2600 words) solo podcast script for "Tesla Shorts Time Daily" Episode {episode_num}.
 
-HOST: Patrick in Vancouver - Canadian, hyper-enthusiastic scientist, newscaster. Voice like a solo YouTuber breaking Tesla news, not robotic.
+HOST: Patrick in Vancouver - Canadian, scientist, newscaster. Voice like a solo Podcaster breaking Tesla news, not robotic.
 
 RULES:
 - Start every line with "Patrick:"
