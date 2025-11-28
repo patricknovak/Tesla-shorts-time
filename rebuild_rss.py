@@ -60,7 +60,7 @@ def rebuild_rss():
             mp3_duration = get_audio_duration(mp3_file)
             mp3_size = mp3_file.stat().st_size
             episode_guid = f"tesla-shorts-time-ep{episode_num:03d}-{date_str}"
-            episode_title = f"Tesla Shorts Time Daily - Episode {episode_num} - {episode_date.strftime('%B %d, %Y')} at 08:12 AM PST"
+            episode_title = f"Tesla Shorts Time Daily - Episode {episode_num} - {episode_date.strftime('%B %d, %Y')}"
 
             # Try to find corresponding MD file
             md_filename = f"Tesla_Shorts_Time_{date_str}.md"
@@ -87,13 +87,13 @@ def rebuild_rss():
                         break
                 episode_description = ' '.join(summary_lines)[:1000] + ' ... 🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939'
             else:
-                episode_description = f"Daily Tesla news digest for {episode_date.strftime('%B %d, %Y')} at 08:12 AM PST. 🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939"
+                episode_description = f"Daily Tesla news digest for {episode_date.strftime('%B %d, %Y')}. 🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939"
 
             episodes.append({
                 'guid': episode_guid,
                 'title': episode_title,
                 'description': episode_description,
-                'pubDate': datetime.datetime.combine(episode_date, datetime.time(8, 0, 0), tzinfo=datetime.timezone.utc),
+                'pubDate': datetime.datetime.combine(episode_date, datetime.time(0, 0, 0), tzinfo=datetime.timezone.utc),
                 'enclosure': {
                     'url': f"{base_url}/{mp3_file.relative_to(project_root)}",
                     'type': 'audio/mpeg',

@@ -555,10 +555,7 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
         
         # Initialize X API client
         x_client = tweepy.Client(
-            consumer_key=os.getenv("X_CONSUMER_KEY"),
-            consumer_secret=os.getenv("X_CONSUMER_SECRET"),
-            access_token=os.getenv("X_ACCESS_TOKEN"),
-            access_token_secret=os.getenv("X_ACCESS_TOKEN_SECRET"),
+            bearer_token=os.getenv("X_BEARER_TOKEN"),
             wait_on_rate_limit=True
         )
         
@@ -1541,9 +1538,7 @@ def format_digest_for_x(digest: str) -> str:
     return formatted
 
 # Format the digest
-podcast_link = '🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939'
 x_thread_formatted = format_digest_for_x(x_thread)
-x_thread_formatted = podcast_link + "\n\n" + x_thread_formatted   
 logging.info(f"Digest formatted for X ({len(x_thread_formatted)} characters)")
 
 # Save both versions (original and formatted)
@@ -1581,10 +1576,7 @@ if ENABLE_X_POSTING:
     import tweepy
 
     x_client = tweepy.Client(
-        consumer_key=os.getenv("X_CONSUMER_KEY"),
-        consumer_secret=os.getenv("X_CONSUMER_SECRET"),
-        access_token=os.getenv("X_ACCESS_TOKEN"),
-        access_token_secret=os.getenv("X_ACCESS_TOKEN_SECRET"),
+        bearer_token=os.getenv("X_BEARER_TOKEN"),
         wait_on_rate_limit=True
     )
     logging.info("@teslashortstime X posting client ready")
