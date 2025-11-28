@@ -573,6 +573,17 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
     if not all_posts:
         return [], []
 
+    # 2. Free fallback using Nitter (if authenticated fetch failed or returned few results)
+    if len(all_posts) < 8:
+        logging.info("Few X posts found via API. Attempting fallback to Nitter scraping for more posts...")
+        nitter_top, nitter_raw = fetch_x_posts_nitter(TRUSTED_USERNAMES)
+        
+        # Merge results (avoiding duplicates by ID)
+        existing_ids = {p['id'] for p in all_posts}
+        for post in nitter_raw:
+            if post['id'] not in existing_ids:
+                all_posts.append(post)
+                
     # Sort + dedupe
     all_posts.sort(key=lambda x: x['final_score'], reverse=True)
     seen = set()
@@ -1269,12 +1280,12 @@ def format_digest_for_x(digest: str) -> str:
     formatted = re.sub(r'\*\*REAL-TIME TSLA price:\*\*', '💰 **REAL-TIME TSLA price:**', formatted)
     
     # Ensure podcast link is always present with full URL (add it if missing or incomplete)
-    podcast_link = '🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939'
     podcast_url = 'https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939'
+    podcast_link_md = f'🎙️ **Tesla Shorts Time Daily Podcast Link:** {podcast_url}'
     
     # Check if the full URL is present (not just the text)
     if podcast_url not in formatted:
-        # Remove any incomplete podcast link text that might be there (but keep lines with the full URL)
+        # If podcast link missing, force add it at the top after price line
         # Match lines that mention podcast but don't contain the full URL
         lines = formatted.split('\n')
         cleaned_lines = []
@@ -1285,38 +1296,24 @@ def format_digest_for_x(digest: str) -> str:
             cleaned_lines.append(line)
         formatted = '\n'.join(cleaned_lines)
         
-        # Find the price line and add podcast link after it
-        price_pattern = r'(💰\s*\*\*REAL-TIME TSLA price:\*\*[^\n]+\n)'
-        if re.search(price_pattern, formatted):
-            formatted = re.sub(price_pattern, r'\1' + podcast_link + '\n\n', formatted)
-        else:
-            # Try without emoji
-            price_pattern = r'(\*\*REAL-TIME TSLA price:\*\*[^\n]+\n)'
-            if re.search(price_pattern, formatted):
-                formatted = re.sub(price_pattern, r'\1' + podcast_link + '\n\n', formatted)
-            else:
-                # If price line not found, add after date line
-                date_pattern = r'(📅\s*\*\*Date:\*\*[^\n]+\n)'
-                if re.search(date_pattern, formatted):
-                    formatted = re.sub(date_pattern, r'\1' + podcast_link + '\n\n', formatted)
-                else:
-                    # Try without emoji
-                    date_pattern = r'(\*\*Date:\*\*[^\n]+\n)'
-                    if re.search(date_pattern, formatted):
-                        formatted = re.sub(date_pattern, r'\1' + podcast_link + '\n\n', formatted)
-                    else:
-                        # If neither found, add after header
-                        header_pattern = r'(🚗⚡\s*\*\*Tesla Shorts Time\*\*\n)'
-                        if re.search(header_pattern, formatted):
-                            formatted = re.sub(header_pattern, r'\1' + podcast_link + '\n\n', formatted)
-                        else:
-                            # Last resort: add at the beginning
-                            formatted = podcast_link + '\n\n' + formatted
+        # Add after the header/price block
+        # Look for the last line of the header block (usually price or date)
+        header_end_pos = 0
+        lines = formatted.split('\n')
+        for i, line in enumerate(lines[:10]):
+            if line.strip() and (line.startswith('💰') or line.startswith('📅') or line.startswith('**') or line.startswith('#')):
+                header_end_pos = i
+        
+        # Insert after the header block
+        lines.insert(header_end_pos + 1, '')
+        lines.insert(header_end_pos + 2, podcast_link_md)
+        lines.insert(header_end_pos + 3, '')
+        formatted = '\n'.join(lines)
     else:
-        # URL is present, but make sure the format is correct with emoji
+        # URL is present, ensure it has the emoji prefix
         formatted = re.sub(
-            r'Tesla Shorts Time Daily Podcast Link:\s*' + re.escape(podcast_url),
-            '🎙️ Tesla Shorts Time Daily Podcast Link: ' + podcast_url,
+            r'(?<!🎙️ )(?<!\*\*)Tesla Shorts Time Daily Podcast Link:\s*' + re.escape(podcast_url),
+            podcast_link_md,
             formatted,
             flags=re.IGNORECASE
         )
@@ -1655,7 +1652,15 @@ def scan_existing_episodes_from_files(digests_dir: Path, base_url: str) -> list:
                 mp3_duration = get_audio_duration(mp3_file)
                 
                 # Create episode data
-                episode_guid = f"tesla-shorts-time-ep{episode_num:03d}-{date_str}"
+                # GUID based on date AND time to allow multiple episodes per day
+                # Get time from mp3 file modification time or default to 000000
+                try:
+                    mtime = datetime.datetime.fromtimestamp(mp3_file.stat().st_mtime)
+                    time_str = mtime.strftime("%H%M%S")
+                except:
+                    time_str = "000000"
+                
+                episode_guid = f"tesla-shorts-time-ep{episode_num:03d}-{date_str}-{time_str}"
                 episode_title = f"Tesla Shorts Time Daily - Episode {episode_num} - {episode_date.strftime('%B %d, %Y')}"
                 
                 episodes.append({
@@ -1819,14 +1824,17 @@ def update_rss_feed(
     fg.podcast.itunes_category(category)
     fg.podcast.itunes_explicit("no")
     
-    # Add all existing episodes (except the one we're updating)
-    episode_guid = f"tesla-shorts-time-ep{episode_num:03d}-{episode_date:%Y%m%d}"
-    episode_updated = False
+    # Add all existing episodes
+    # We no longer skip based on GUID match because we want to keep all episodes, even for same day
+    # But we should check for exact duplicate GUIDs to avoid duplicates if run on same file
+    
+    # Generate GUID for the new episode based on current time to ensure uniqueness
+    current_time_str = datetime.datetime.now().strftime("%H%M%S")
+    new_episode_guid = f"tesla-shorts-time-ep{episode_num:03d}-{episode_date:%Y%m%d}-{current_time_str}"
     
     for ep_data in existing_episodes:
-        if ep_data.get('guid') == episode_guid:
-            # Skip the episode we're about to update
-            episode_updated = True
+        # Skip if exact same GUID (should typically not happen with time-based GUIDs unless run very fast)
+        if ep_data.get('guid') == new_episode_guid:
             continue
         
         # Re-add existing episode
@@ -1876,7 +1884,7 @@ def update_rss_feed(
     
     # Add or update the new episode
     entry = fg.add_entry()
-    entry.id(episode_guid)
+    entry.id(new_episode_guid)
     entry.title(episode_title)
     entry.description(episode_description)
     entry.link(href=f"{base_url}/digests/{mp3_filename}")
