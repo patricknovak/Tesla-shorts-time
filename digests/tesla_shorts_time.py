@@ -92,6 +92,17 @@ def fix_tesla_pronunciation(text: str) -> str:
     # These will now stay normal because the regex requires word boundaries
     return text
 
+def generate_episode_thumbnail(base_image_path, episode_num, date_str, output_path):
+    img = Image.open(base_image_path)
+    draw = ImageDraw.Draw(img)
+    try:
+        font = ImageFont.truetype("arial.ttf", 48)
+    except IOError:
+        font = ImageFont.load_default()
+    draw.text((50, 50), f"Episode {episode_num}", font=font, fill=(255, 255, 255))
+    draw.text((50, 100), date_str, font=font, fill=(255, 255, 255))
+    img.save(output_path, "PNG")
+
 # ========================== PATHS & ENV ==========================
 script_dir = Path(__file__).resolve().parent        # → .../digests
 project_root = script_dir.parent                      # → .../tesla_shorts_time
@@ -1482,6 +1493,10 @@ if ENABLE_X_POSTING:
     import tweepy
 
     x_client = tweepy.Client(
+        consumer_key=os.getenv("X_CONSUMER_KEY"),
+        consumer_secret=os.getenv("X_CONSUMER_SECRET"),
+        access_token=os.getenv("X_ACCESS_TOKEN"),
+        access_token_secret=os.getenv("X_ACCESS_TOKEN_SECRET"),
         bearer_token=os.getenv("X_BEARER_TOKEN"),
         wait_on_rate_limit=True
     )
@@ -2207,13 +2222,3 @@ print(f"Podcast → {final_mp3}")
 print("="*80)
 
 # Add at the end of the file, before the final print statements
-def generate_episode_thumbnail(base_image_path, episode_num, date_str, output_path):
-    img = Image.open(base_image_path)
-    draw = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.truetype("arial.ttf", 48)
-    except IOError:
-        font = ImageFont.load_default()
-    draw.text((50, 50), f"Episode {episode_num}", font=font, fill=(255, 255, 255))
-    draw.text((50, 100), date_str, font=font, fill=(255, 255, 255))
-    img.save(output_path, "PNG")
