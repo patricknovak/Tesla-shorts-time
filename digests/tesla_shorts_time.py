@@ -976,7 +976,7 @@ You are an elite Tesla news curator producing the daily "Tesla Shorts Time" news
 
 ### MANDATORY SELECTION & COUNTS (CRITICAL - FOLLOW EXACTLY)
 - **News**: You MUST select EXACTLY 10 unique articles. If you have fewer than 10 available, use ALL of them and number them 1 through N (where N is the count). If you have more than 10, select the BEST 10 and number them 1-10. DO NOT output 20 items - output EXACTLY 10. Prioritize high-quality sources; each must cover a DIFFERENT Tesla story/angle.
-- **X Posts**: You MUST select EXACTLY 10 unique posts from the pre-fetched list above. If you have fewer than 10 available, use ALL of them and number them 1 through N. If you have more than 10, select the BEST 10 and number them 1-10. DO NOT output 20 items - output EXACTLY 10. NEVER invent, make up, or hallucinate X post URLs - only use exact URLs from the pre-fetched list. Each must cover a DIFFERENT angle; max 3 per username.
+- **X Posts**: You MUST include a "Top 10 X Posts" section with EXACTLY 10 unique posts from the pre-fetched list above. This section is MANDATORY and must appear between the news items and the Short Spot section. If you have fewer than 10 available, use ALL of them and number them 1 through N. If you have more than 10, select the BEST 10 and number them 1-10. DO NOT output 20 items - output EXACTLY 10. NEVER invent, make up, or hallucinate X post URLs - only use exact URLs from the pre-fetched list. Each must cover a DIFFERENT angle; max 3 per username. DO NOT skip this section - it is required.
 - **CRITICAL URL RULE**: NEVER invent X post URLs. If you don't have enough pre-fetched posts, output fewer items rather than making up URLs. All URLs must be exact matches from the pre-fetched list above for the news and X posts.
 - **Diversity Check**: Before finalizing, verify no similar content for the news and X posts; replace if needed from pre-fetched pool for the news and X posts.
 
@@ -993,7 +993,8 @@ You are an elite Tesla news curator producing the daily "Tesla Shorts Time" news
 2. [Repeat format for 3-10; if <10 items, stop at available count, add a blank line after each item and the last item]
 
 ━━━━━━━━━━━━━━━━━━━━
-### Top X Posts
+### Top 10 X Posts
+**MANDATORY: You MUST include this section with exactly 10 X posts (or all available if fewer than 10). This section is REQUIRED and must appear between the news items and Short Spot.**
 1. **Catchy Title: DD Month, YYYY, HH:MM AM/PM PST**  
    2–4 sentences: Explain post & significance (pro-Tesla angle). End with: Post: [EXACT URL FROM PRE-FETCHED—https://x.com/username/status/ID]
 2. [Repeat for remaining posts; use only pre-fetched posts, never invent URLs. If fewer than 10 available, output only what exists (e.g., if 8 posts, number 1-8), add a blank line after each item and the last item]
@@ -1108,7 +1109,7 @@ if news_match:
                 new_news_section += f"{i}. {item_cleaned.strip()}\n\n"
             x_thread = x_thread.replace(news_match.group(1), new_news_section)
 
-# Find and limit X posts to exactly 10
+# Find and limit X posts to exactly 10, or add the section if missing
 x_posts_pattern = r'(### Top X Posts|### Top 10 X Posts.*?)(## Short Spot|### Short Squeeze|━━)'
 x_posts_match = re.search(x_posts_pattern, x_thread, re.DOTALL | re.IGNORECASE)
 if x_posts_match:
@@ -1127,6 +1128,45 @@ if x_posts_match:
                 item_cleaned = re.sub(r'^\d+\.\s+', '', item, flags=re.MULTILINE)
                 new_x_section += f"{i}. {item_cleaned.strip()}\n\n"
             x_thread = x_thread.replace(x_posts_match.group(1), new_x_section)
+elif top_x_posts and len(top_x_posts) > 0:
+    # X posts section is missing but we have pre-fetched posts - add it!
+    logging.warning("⚠️  X posts section missing from Grok output. Adding it using pre-fetched posts...")
+    # Find where to insert (after news items, before Short Spot)
+    short_spot_pattern = r'(## Short Spot|📉 \*\*Short Spot\*\*)'
+    short_spot_match = re.search(short_spot_pattern, x_thread, re.IGNORECASE)
+    
+    # Select top 10 X posts
+    posts_to_add = top_x_posts[:10]
+    x_section = "\n\n━━━━━━━━━━━━━━━━━━━━\n\n🐦 **Top 10 X Posts**\n\n"
+    
+    for i, post in enumerate(posts_to_add, 1):
+        # Extract username from URL or use the username field
+        username = post.get('username', 'unknown')
+        name = post.get('name', username)
+        text = post.get('text', '')[:200] + '...' if len(post.get('text', '')) > 200 else post.get('text', '')
+        url = post.get('url', '')
+        created_at = post.get('created_at', '')
+        
+        x_section += f"{i}. **@{username} - {text}**\n"
+        x_section += f"   Posted: {created_at}\n"
+        x_section += f"   Post: {url}\n\n"
+    
+    if short_spot_match:
+        # Insert before Short Spot
+        insert_pos = short_spot_match.start()
+        x_thread = x_thread[:insert_pos] + x_section + x_thread[insert_pos:]
+    else:
+        # Insert before the last separator or at the end
+        last_separator = x_thread.rfind('━━━━━━━━━━━━━━━━━━━━')
+        if last_separator > 0:
+            # Find the end of that line
+            end_pos = x_thread.find('\n', last_separator)
+            if end_pos > 0:
+                x_thread = x_thread[:end_pos+1] + x_section + x_thread[end_pos+1:]
+            else:
+                x_thread = x_thread + x_section
+        else:
+            x_thread = x_thread + x_section
 
 # Validate counts - check if we have exactly 10 news and 10 X posts
 import re
@@ -1326,7 +1366,9 @@ def format_digest_for_x(digest: str) -> str:
     podcast_link_md = f'🎙️ **Tesla Shorts Time Daily Podcast Link:** {podcast_url}'
     
     # Check if the full URL is present (not just the text)
-    if podcast_url not in formatted:
+    # Also check for incomplete podcast links (has emoji but no URL)
+    has_incomplete_podcast_link = bool(re.search(r'🎙️[^\n]*[Pp]odcast[^\n]*(?!https://)', formatted))
+    if podcast_url not in formatted or has_incomplete_podcast_link:
         # Remove any incomplete podcast link text
         lines = formatted.split('\n')
         cleaned_lines = []
