@@ -27,6 +27,7 @@ from zoneinfo import ZoneInfo
 from PIL import Image, ImageDraw, ImageFont
 import feedparser
 from typing import List, Dict, Any
+import tweepy
 
 # ========================== LOGGING ==========================
 logging.basicConfig(
@@ -384,6 +385,65 @@ TRUSTED_USERNAMES = [
     "OptimusTesla", "GigaTexas", "GigaBerlin", "SawyerMerritt"
 ]
 
+def fetch_x_posts_nitter(usernames: List[str]) -> tuple[List[Dict], List[Dict]]:
+    """Fetch X posts using Nitter scraping (Free fallback)."""
+    try:
+        from ntscraper import Nitter
+        logging.info("Using Nitter scraper as fallback...")
+    except ImportError:
+        logging.warning("ntscraper not installed. Cannot use free Nitter scraping.")
+        return [], []
+
+    scraper = Nitter(log_level=1, skip_instance_check=False)
+    all_posts = []
+    
+    # Limit to top accounts to save time and reduce failure chance
+    priority_accounts = [u for u in usernames if u.lower() in ["elonmusk", "tesla", "sawyermerritt", "tesla_ai"]]
+    if not priority_accounts:
+        priority_accounts = usernames[:5]
+    
+    for username in priority_accounts:
+        try:
+            logging.info(f"Scraping tweets for @{username}...")
+            tweets_data = scraper.get_tweets(username, mode='user', number=5)
+            
+            if not tweets_data or 'tweets' not in tweets_data:
+                continue
+                
+            for tweet in tweets_data['tweets']:
+                if tweet.get('is_pinned', False):
+                    continue
+                
+                text = tweet.get('text', '')
+                likes = tweet['stats'].get('likes', 0)
+                retweets = tweet['stats'].get('retweets', 0)
+                comments = tweet['stats'].get('comments', 0)
+                
+                score = (likes * 1.0) + (retweets * 3.0) + (comments * 1.5)
+                if username.lower() == 'elonmusk':
+                    score *= 3.0
+                    
+                all_posts.append({
+                    "id": tweet['link'].split('/')[-1] if 'link' in tweet else '',
+                    "text": text,
+                    "username": username,
+                    "name": tweet['user']['name'],
+                    "url": tweet['link'],
+                    "created_at": tweet['date'],
+                    "likes": likes,
+                    "retweets": retweets,
+                    "replies": comments,
+                    "final_score": score,
+                    "is_elon_or_sawyer_repost": False,
+                    "hours_old": 0
+                })
+        except Exception as e:
+            logging.warning(f"Failed to scrape {username}: {e}")
+            continue
+
+    all_posts.sort(key=lambda x: x['final_score'], reverse=True)
+    return all_posts[:25], all_posts
+
 def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
     """
     100% free, maximum variety & quality.
@@ -496,7 +556,8 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
 
     except Exception as e:
         logging.warning(f"Search failed: {e}")
-        return [], []
+        logging.info("Attempting fallback to Nitter scraping...")
+        return fetch_x_posts_nitter(TRUSTED_USERNAMES)
 
     if not all_posts:
         return [], []
@@ -888,8 +949,6 @@ X_PROMPT = f"""
 {news_section}
 
 {x_posts_section}
-
-{short_interest_section}
 
 You are an elite Tesla news curator producing the daily "Tesla Shorts Time" newsletter. Use ONLY the pre-fetched news and X posts above. Do NOT hallucinate, invent, or search for new content/URLs—stick to exact provided links. NEVER invent X post URLs - if you don't have enough pre-fetched posts, output fewer items (e.g., if only 8 X posts, number them 1-8). If you have zero pre-fetched X posts, completely remove the "Top X Posts" section from your output. Prioritize diversity: No duplicates/similar stories (≥70% overlap in angle/content); max 3 from one source/account.
 
