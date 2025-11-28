@@ -974,9 +974,9 @@ X_PROMPT = f"""
 
 You are an elite Tesla news curator producing the daily "Tesla Shorts Time" newsletter. Use ONLY the pre-fetched news and X posts above. Do NOT hallucinate, invent, or search for new content/URLs—stick to exact provided links. NEVER invent X post URLs - if you don't have enough pre-fetched posts, output fewer items (e.g., if only 8 X posts, number them 1-8). If you have zero pre-fetched X posts, completely remove the "Top X Posts" section from your output. Prioritize diversity: No duplicates/similar stories (≥70% overlap in angle/content); max 3 from one source/account.
 
-### MANDATORY SELECTION & COUNTS
-- **News**: Select EXACTLY 10 unique articles (if <10 available, use all). Prioritize high-quality sources; each must cover a DIFFERENT Tesla story/angle.
-- **X Posts**: Select UP TO 10 unique posts from pre-fetched list. If fewer than 10 are available, output only what exists. NEVER invent, make up, or hallucinate X post URLs - only use exact URLs from the pre-fetched list. If you cannot find enough posts, output fewer items (e.g., if only 8 posts, number them 1-8). Each must cover a DIFFERENT angle; max 3 per username.
+### MANDATORY SELECTION & COUNTS (CRITICAL - FOLLOW EXACTLY)
+- **News**: You MUST select EXACTLY 10 unique articles. If you have fewer than 10 available, use ALL of them and number them 1 through N (where N is the count). If you have more than 10, select the BEST 10 and number them 1-10. DO NOT output 20 items - output EXACTLY 10. Prioritize high-quality sources; each must cover a DIFFERENT Tesla story/angle.
+- **X Posts**: You MUST select EXACTLY 10 unique posts from the pre-fetched list above. If you have fewer than 10 available, use ALL of them and number them 1 through N. If you have more than 10, select the BEST 10 and number them 1-10. DO NOT output 20 items - output EXACTLY 10. NEVER invent, make up, or hallucinate X post URLs - only use exact URLs from the pre-fetched list. Each must cover a DIFFERENT angle; max 3 per username.
 - **CRITICAL URL RULE**: NEVER invent X post URLs. If you don't have enough pre-fetched posts, output fewer items rather than making up URLs. All URLs must be exact matches from the pre-fetched list above for the news and X posts.
 - **Diversity Check**: Before finalizing, verify no similar content for the news and X posts; replace if needed from pre-fetched pool for the news and X posts.
 
@@ -1085,6 +1085,48 @@ for line in x_thread.splitlines():
         break
     lines.append(line)
 x_thread = "\n".join(lines).strip()
+
+# Post-process to enforce exactly 10 items per section (fix Grok's tendency to output 20)
+import re
+# Find and limit news items to exactly 10
+news_pattern = r'(### Top 10 News Items.*?)(### Top X Posts|## Short Spot|━━)'
+news_match = re.search(news_pattern, x_thread, re.DOTALL | re.IGNORECASE)
+if news_match:
+    news_section = news_match.group(1)
+    # Count numbered items (1. through 10.)
+    news_items = re.findall(r'^(\d+)\.\s+\*\*', news_section, re.MULTILINE)
+    if len(news_items) > 10:
+        # Find all numbered items
+        items = re.findall(r'^(\d+)\.\s+.*?(?=^\d+\.|###|##|━━|$)', news_section, re.MULTILINE | re.DOTALL)
+        if len(items) > 10:
+            # Keep only first 10, renumber them
+            kept_items = items[:10]
+            new_news_section = "### Top 10 News Items\n\n"
+            for i, item in enumerate(kept_items, 1):
+                # Remove old number and add new number
+                item_cleaned = re.sub(r'^\d+\.\s+', '', item, flags=re.MULTILINE)
+                new_news_section += f"{i}. {item_cleaned.strip()}\n\n"
+            x_thread = x_thread.replace(news_match.group(1), new_news_section)
+
+# Find and limit X posts to exactly 10
+x_posts_pattern = r'(### Top X Posts|### Top 10 X Posts.*?)(## Short Spot|### Short Squeeze|━━)'
+x_posts_match = re.search(x_posts_pattern, x_thread, re.DOTALL | re.IGNORECASE)
+if x_posts_match:
+    x_posts_section = x_posts_match.group(1)
+    # Count numbered items
+    x_items = re.findall(r'^(\d+)\.\s+\*\*', x_posts_section, re.MULTILINE)
+    if len(x_items) > 10:
+        # Find all numbered items
+        items = re.findall(r'^(\d+)\.\s+.*?(?=^\d+\.|##|###|━━|$)', x_posts_section, re.MULTILINE | re.DOTALL)
+        if len(items) > 10:
+            # Keep only first 10, renumber them
+            kept_items = items[:10]
+            new_x_section = "### Top 10 X Posts\n\n"
+            for i, item in enumerate(kept_items, 1):
+                # Remove old number and add new number
+                item_cleaned = re.sub(r'^\d+\.\s+', '', item, flags=re.MULTILINE)
+                new_x_section += f"{i}. {item_cleaned.strip()}\n\n"
+            x_thread = x_thread.replace(x_posts_match.group(1), new_x_section)
 
 # Validate counts - check if we have exactly 10 news and 10 X posts
 import re
@@ -1285,8 +1327,7 @@ def format_digest_for_x(digest: str) -> str:
     
     # Check if the full URL is present (not just the text)
     if podcast_url not in formatted:
-        # If podcast link missing, force add it at the top after price line
-        # Match lines that mention podcast but don't contain the full URL
+        # Remove any incomplete podcast link text
         lines = formatted.split('\n')
         cleaned_lines = []
         for line in lines:
@@ -1296,27 +1337,52 @@ def format_digest_for_x(digest: str) -> str:
             cleaned_lines.append(line)
         formatted = '\n'.join(cleaned_lines)
         
-        # Add after the header/price block
-        # Look for the last line of the header block (usually price or date)
-        header_end_pos = 0
+        # Find the price line and insert podcast link right after it
         lines = formatted.split('\n')
-        for i, line in enumerate(lines[:10]):
-            if line.strip() and (line.startswith('💰') or line.startswith('📅') or line.startswith('**') or line.startswith('#')):
-                header_end_pos = i
+        insert_pos = None
+        for i, line in enumerate(lines):
+            # Look for price line (with or without emoji)
+            if 'REAL-TIME TSLA price' in line or '💰' in line:
+                insert_pos = i + 1
+                break
+            # Fallback: look for date line
+            elif 'Date:' in line and '📅' in line and insert_pos is None:
+                insert_pos = i + 1
         
-        # Insert after the header block
-        lines.insert(header_end_pos + 1, '')
-        lines.insert(header_end_pos + 2, podcast_link_md)
-        lines.insert(header_end_pos + 3, '')
+        # If we found a position, insert the podcast link
+        if insert_pos is not None:
+            lines.insert(insert_pos, '')
+            lines.insert(insert_pos + 1, podcast_link_md)
+            lines.insert(insert_pos + 2, '')
+        else:
+            # Last resort: add at the very beginning after header
+            header_end = 0
+            for i, line in enumerate(lines[:5]):
+                if line.strip() and (line.startswith('#') or line.startswith('🚗')):
+                    header_end = i
+            lines.insert(header_end + 1, '')
+            lines.insert(header_end + 2, podcast_link_md)
+            lines.insert(header_end + 3, '')
+        
         formatted = '\n'.join(lines)
     else:
-        # URL is present, ensure it has the emoji prefix
+        # URL is present, ensure it has the emoji prefix and proper formatting
+        # Replace any variation of the podcast link with the properly formatted version
         formatted = re.sub(
-            r'(?<!🎙️ )(?<!\*\*)Tesla Shorts Time Daily Podcast Link:\s*' + re.escape(podcast_url),
+            r'🎙️?\s*[Tt]esla\s+[Ss]horts\s+[Tt]ime\s+[Dd]aily\s+[Pp]odcast\s+[Ll]ink:?\s*' + re.escape(podcast_url),
             podcast_link_md,
             formatted,
             flags=re.IGNORECASE
         )
+        # Also handle case where URL is there but formatting is wrong
+        if podcast_url in formatted and '🎙️' not in formatted.split(podcast_url)[0][-50:]:
+            # URL exists but no emoji nearby, add it
+            formatted = re.sub(
+                r'([^\n]*)' + re.escape(podcast_url),
+                r'\1\n' + podcast_link_md,
+                formatted,
+                count=1
+            )
     
     # Format section headers with emojis (preserve existing markdown)
     formatted = re.sub(r'^### Top 10 News Items', '📰 **Top 10 News Items**', formatted, flags=re.MULTILINE)
@@ -2160,6 +2226,9 @@ if ENABLE_PODCAST and not TEST_MODE and final_mp3 and final_mp3.exists():
         thumbnail_path = digests_dir / thumbnail_filename
         base_image_path = project_root / "podcast-image.jpg"
         generate_episode_thumbnail(base_image_path, episode_num, today_str, thumbnail_path)
+        
+        # Define base_url for RSS feed
+        base_url = "https://raw.githubusercontent.com/patricknovak/Tesla-shorts-time/main"
         episode_image_url = f"{base_url}/digests/{thumbnail_filename}"
         
         # Update RSS feed
@@ -2171,7 +2240,8 @@ if ENABLE_PODCAST and not TEST_MODE and final_mp3 and final_mp3.exists():
             episode_date=datetime.date.today(),
             mp3_filename=mp3_filename,
             mp3_duration=audio_duration,
-            mp3_path=final_mp3
+            mp3_path=final_mp3,
+            base_url=base_url
         )
         logging.info(f"RSS feed updated with Episode {episode_num}")
     except Exception as e:
