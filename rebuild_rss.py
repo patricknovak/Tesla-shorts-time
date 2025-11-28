@@ -43,7 +43,7 @@ def rebuild_rss():
     fg.podcast.itunes_author("Patrick")
     fg.podcast.itunes_summary("Daily Tesla news digest and podcast covering the latest developments, stock updates, and short squeeze celebrations.")
     fg.podcast.itunes_owner(name='Patrick', email='contact@teslashortstime.com')
-    fg.podcast.itunes_image(f"{base_url}/podcast-image.jpg")
+    fg.podcast.itunes_image(f"{base_url}/podcast-image-v2.jpg")
     fg.podcast.itunes_category("Technology")
     fg.podcast.itunes_explicit("no")
 
@@ -103,7 +103,7 @@ def rebuild_rss():
                 'itunes_episode': str(episode_num),
                 'itunes_season': '1',
                 'itunes_episode_type': 'full',
-                'itunes_image': f"{base_url}/podcast-image.jpg",
+                'itunes_image': f"{base_url}/podcast-image-v2.jpg",
                 'episode_num': episode_num
             })
 

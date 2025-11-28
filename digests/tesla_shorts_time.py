@@ -155,140 +155,6 @@ ELEVEN_API = "https://api.elevenlabs.io/v1"
 ELEVEN_KEY = os.getenv("ELEVENLABS_API_KEY")
 # NEWSAPI_KEY no longer needed - using RSS feeds instead
 
-# ========================== SHORT INTEREST SCRAPER ==========================
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type((requests.RequestException, requests.Timeout))
-)
-def get_short_interest():
-    """Fetch Tesla short interest data from fintel.io with BeautifulSoup parsing"""
-    import re
-    
-    # Fallback hardcoded values (updated periodically)
-    FALLBACK_SHORT_INTEREST_PCT = 3.2  # Approximate recent TSLA short interest %
-    FALLBACK_SHORT_INTEREST_VALUE = 50.2  # Approximate in billions
-    
-    try:
-        url = "https://fintel.io/ss/us/tsla"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        short_interest_pct = None
-        short_interest_value = None
-        
-        # Strategy 1: Look for tables with short interest data
-        tables = soup.find_all('table')
-        for table in tables:
-            rows = table.find_all('tr')
-            for row in rows:
-                cells = row.find_all(['td', 'th'])
-                text = ' '.join([cell.get_text(strip=True) for cell in cells]).lower()
-                if 'short interest' in text or 'shares short' in text:
-                    # Look for percentage in this row or next row
-                    row_text = row.get_text()
-                    # Try to find percentage pattern (e.g., "3.2%", "3.2 %")
-                    pct_match = re.search(r'(\d+\.?\d*)\s*%', row_text)
-                    if pct_match:
-                        try:
-                            short_interest_pct = float(pct_match.group(1))
-                        except ValueError:
-                            pass
-                    
-                    # Try to find dollar value (e.g., "$50.2B", "50.2 billion")
-                    value_match = re.search(r'\$?(\d+\.?\d*)\s*[Bb]', row_text)
-                    if value_match:
-                        try:
-                            short_interest_value = float(value_match.group(1))
-                        except ValueError:
-                            pass
-        
-        # Strategy 2: Look for divs/spans with short interest keywords
-        if short_interest_pct is None or short_interest_value is None:
-            for element in soup.find_all(['div', 'span', 'p']):
-                text = element.get_text(strip=True).lower()
-                if 'short interest' in text or 'shares short' in text:
-                    full_text = element.get_text()
-                    # Extract percentage
-                    if short_interest_pct is None:
-                        pct_match = re.search(r'(\d+\.?\d*)\s*%', full_text)
-                        if pct_match:
-                            try:
-                                short_interest_pct = float(pct_match.group(1))
-                            except ValueError:
-                                pass
-                    # Extract dollar value
-                    if short_interest_value is None:
-                        value_match = re.search(r'\$?(\d+\.?\d*)\s*[Bb]', full_text)
-                        if value_match:
-                            try:
-                                short_interest_value = float(value_match.group(1))
-                            except ValueError:
-                                pass
-        
-        # Strategy 3: Search entire page text for patterns
-        if short_interest_pct is None or short_interest_value is None:
-            page_text = soup.get_text()
-            # Look for patterns like "Short Interest: 3.2%" or "3.2% of float"
-            if short_interest_pct is None:
-                pct_patterns = [
-                    r'short\s+interest[:\s]+(\d+\.?\d*)\s*%',
-                    r'(\d+\.?\d*)\s*%\s+of\s+(float|shares)',
-                    r'(\d+\.?\d*)\s*%\s+short'
-                ]
-                for pattern in pct_patterns:
-                    match = re.search(pattern, page_text, re.IGNORECASE)
-                    if match:
-                        try:
-                            short_interest_pct = float(match.group(1))
-                            break
-                        except (ValueError, IndexError):
-                            continue
-            
-            if short_interest_value is None:
-                value_patterns = [
-                    r'\$(\d+\.?\d*)\s*[Bb]illion.*short',
-                    r'short.*\$(\d+\.?\d*)\s*[Bb]illion'
-                ]
-                for pattern in value_patterns:
-                    match = re.search(pattern, page_text, re.IGNORECASE)
-                    if match:
-                        try:
-                            short_interest_value = float(match.group(1))
-                            break
-                        except (ValueError, IndexError):
-                            continue
-        
-        # Use fallback if parsing failed
-        if short_interest_pct is None:
-            short_interest_pct = FALLBACK_SHORT_INTEREST_PCT
-            logging.info(f"Using fallback short interest percentage: {short_interest_pct}%")
-        else:
-            logging.info(f"Parsed short interest percentage: {short_interest_pct}%")
-        
-        if short_interest_value is None:
-            short_interest_value = FALLBACK_SHORT_INTEREST_VALUE
-            logging.info(f"Using fallback short interest value: ${short_interest_value}B")
-        else:
-            logging.info(f"Parsed short interest value: ${short_interest_value}B")
-        
-        return {
-            "short_interest_pct": short_interest_pct,
-            "short_interest_value": short_interest_value,
-            "source": "fintel.io" if short_interest_pct != FALLBACK_SHORT_INTEREST_PCT else "fallback"
-        }
-    except Exception as e:
-        logging.warning(f"Could not fetch short interest data from fintel.io: {e}")
-        logging.info("Using fallback short interest values")
-        return {
-            "short_interest_pct": FALLBACK_SHORT_INTEREST_PCT,
-            "short_interest_value": FALLBACK_SHORT_INTEREST_VALUE,
-            "source": "fallback"
-        }
 
 # ========================== STEP 1: FETCH TESLA NEWS FROM RSS FEEDS ==========================
 logging.info("Step 1: Fetching Tesla news from RSS feeds for the last 24 hours...")
@@ -1013,15 +879,6 @@ else:
     # This should never happen due to the check above, but handle gracefully
     x_posts_section = "## PRE-FETCHED X POSTS: None available\n\n"
 
-# Fetch short interest data for Short Squeeze section
-logging.info("Fetching short interest data...")
-short_interest_data = get_short_interest()
-short_interest_section = ""
-if short_interest_data:
-    short_interest_section = f"\n## SHORT INTEREST DATA (for Short Squeeze section):\n"
-    short_interest_section += f"Current short interest: {short_interest_data['short_interest_pct']}% of float\n"
-    short_interest_section += f"Short interest value: ${short_interest_data['short_interest_value']}B\n"
-    short_interest_section += f"Source: {short_interest_data['source']}\n"
 
 X_PROMPT = f"""
 # Tesla Shorts Time - DAILY EDITION
@@ -1045,7 +902,7 @@ You are an elite Tesla news curator producing the daily "Tesla Shorts Time" news
 ### FORMATTING (EXACT—USE MARKDOWN AS SHOWN)
 # Tesla Shorts Time
 **Date:** {today_str}
-**REAL-TIME TSLA price:** ${price:.2f}
+**REAL-TIME TSLA price:** ${price:.2f} {change_str}
 🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -1069,7 +926,7 @@ One bearish item from pre-fetched (news or X post) that's negative for Tesla/sto
 ━━━━━━━━━━━━━━━━━━━━
 ### Short Squeeze
 Dedicated paragraph on short-seller pain:
-Add 2 specific failed bear predictions (2020–2025, with references and links from past). End with YTD/recent squeeze $ losses.
+Add specific failed bear predictions (2020–2025, with references and links from past).
 
 ━━━━━━━━━━━━━━━━━━━━
 ### Daily Challenge
@@ -1592,7 +1449,7 @@ RULES:
 
 SCRIPT STRUCTURE:
 [Intro music - 10 seconds]
-Patrick: Welcome to Tesla Shorts Time Daily, episode {episode_num}. It is {today_str}. I'm Patrick in Vancouver, Canada. TSLA stock price is ${price:.2f} right now. Thank you for joining us today. If you like the show, please like, share, rate and subscribe to the podcast, it really helps. Now straight to the daily news updates you are here for.
+Patrick: Welcome to Tesla Shorts Time Daily, episode {episode_num}. It is {today_str}. I'm Patrick in Vancouver, Canada. TSLA stock price is ${price:.2f} right now{' in after-hours trading' if info.get("marketState") == "POST" else ''}. Thank you for joining us today. If you like the show, please like, share, rate and subscribe to the podcast, it really helps. Now straight to the daily news updates you are here for.
 
 [Narrate EVERY item from the digest in order - no skipping]
 - For each news item: Read the title with excitement, then paraphrase the summary naturally
