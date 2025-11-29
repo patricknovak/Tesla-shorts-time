@@ -14,6 +14,7 @@ import requests
 import tempfile
 import html
 import json
+import re
 import xml.etree.ElementTree as ET
 from feedgen.feed import FeedGenerator
 from pathlib import Path
@@ -149,11 +150,53 @@ change_pct = (change / prev_close * 100) if prev_close else 0
 market_status = " (After-hours)" if info.get("marketState") == "POST" else ""
 change_str = f"{change:+.2f} ({change_pct:+.2f}%) {market_status}" if change != 0 else "unchanged"
 
-episode_num = (datetime.date.today() - datetime.date(2025, 1, 1)).days + 1
-
 # Folders - use absolute paths
 digests_dir = project_root / "digests"
 digests_dir.mkdir(exist_ok=True)
+
+# Determine episode number by finding the highest existing episode number and incrementing
+def get_next_episode_number(rss_path: Path, digests_dir: Path) -> int:
+    """Get the next episode number by finding the highest existing episode number."""
+    max_episode = 0
+    
+    # Check RSS feed first
+    if rss_path.exists():
+        try:
+            tree = ET.parse(str(rss_path))
+            root = tree.getroot()
+            channel = root.find('channel')
+            if channel is not None:
+                for item in channel.findall('item'):
+                    itunes_episode = item.find('{http://www.itunes.com/dtds/podcast-1.0.dtd}episode')
+                    if itunes_episode is not None and itunes_episode.text:
+                        try:
+                            ep_num = int(itunes_episode.text)
+                            max_episode = max(max_episode, ep_num)
+                        except ValueError:
+                            pass
+        except Exception as e:
+            logging.warning(f"Could not parse RSS feed to find episode number: {e}")
+    
+    # Also check existing MP3 files
+    pattern = r"Tesla_Shorts_Time_Pod_Ep(\d+)_\d{8}\.mp3"
+    for mp3_file in digests_dir.glob("Tesla_Shorts_Time_Pod_Ep*.mp3"):
+        match = re.match(pattern, mp3_file.name)
+        if match:
+            try:
+                ep_num = int(match.group(1))
+                max_episode = max(max_episode, ep_num)
+            except ValueError:
+                pass
+    
+    # Return next episode number (increment by 1)
+    next_episode = max_episode + 1
+    logging.info(f"Next episode number: {next_episode} (highest existing: {max_episode})")
+    return next_episode
+
+# Get the next episode number
+rss_path = project_root / "podcast.rss"
+episode_num = get_next_episode_number(rss_path, digests_dir)
+
 tmp_dir = Path(tempfile.gettempdir()) / "tts"
 tmp_dir.mkdir(exist_ok=True, parents=True)
 
