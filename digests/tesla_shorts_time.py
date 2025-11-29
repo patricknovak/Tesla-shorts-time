@@ -469,10 +469,14 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
     all_posts = []
     raw_posts = []
 
-    # 1. Original posts from trusted accounts
+    # 1. Original posts from trusted accounts - FILTER FOR TESLA-RELATED CONTENT
+    # Add Tesla-related keywords to ensure we only get Tesla content
+    tesla_keywords = "(Tesla OR TSLA OR Model OR Cybertruck OR FSD OR \"Full Self-Driving\" OR Supercharger OR Giga OR Optimus OR Robotaxi OR 4680 OR LFP OR HW4 OR HW5 OR AI5)"
     from_part = " OR ".join([f"from:{u}" for u in TRUSTED_USERNAMES if u.isalnum()])
     repost_part = "retweets_of:elonmusk OR retweets_of:SawyerMerritt"
-    query = f"({from_part}) OR ({repost_part}) -is:reply lang:en"
+    # Filter for Tesla-related content from trusted accounts
+    # Note: X API requires keywords to be in the query, so we combine account filters with Tesla keywords
+    query = f"({from_part}) ({tesla_keywords}) OR ({repost_part}) ({tesla_keywords}) -is:reply lang:en"
 
     try:
         import tweepy
@@ -994,8 +998,8 @@ You are an elite Tesla news curator producing the daily "Tesla Shorts Time" news
 ### Top 10 X Posts
 **MANDATORY: You MUST include this section with exactly 10 X posts (or all available if fewer than 10). This section is REQUIRED and must appear between the news items and Short Spot.**
 1. **Catchy Title: DD Month, YYYY, HH:MM AM/PM PST**  
-   2–4 sentences: Explain post & significance (pro-Tesla angle). End with: Post: [EXACT URL FROM PRE-FETCHED—https://x.com/username/status/ID]
-2. [Repeat for remaining posts; use only pre-fetched posts, never invent URLs. If fewer than 10 available, output only what exists (e.g., if 8 posts, number 1-8), add a blank line after each item and the last item]
+   2–4 sentences: Explain post & significance (pro-Tesla angle). End with: Post: https://x.com/username/status/ID (use EXACT URL from pre-fetched list, write as plain text URL, no brackets or markdown)
+2. [Repeat for remaining posts; use only pre-fetched posts, never invent URLs. If fewer than 10 available, output only what exists (e.g., if 8 posts, number 1-8), add a blank line after each item and the last item. CRITICAL: Write URLs as plain text like "Post: https://x.com/username/status/1234567890" - do NOT use markdown brackets]
 
 ━━━━━━━━━━━━━━━━━━━━
 ## Short Spot
@@ -1086,7 +1090,34 @@ for line in x_thread.splitlines():
 x_thread = "\n".join(lines).strip()
 
 # Post-process to enforce exactly 10 items per section (fix Grok's tendency to output 20)
+# Also fix podcast link and X post URLs
 import re
+
+# First, ensure podcast link is present with full URL
+podcast_url = 'https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939'
+podcast_link_md = f'🎙️ **Tesla Shorts Time Daily Podcast Link:** {podcast_url}'
+if podcast_url not in x_thread:
+    # Find price line and insert podcast link after it
+    price_match = re.search(r'(\*\*REAL-TIME TSLA price:\*\*[^\n]+\n)', x_thread)
+    if price_match:
+        x_thread = x_thread[:price_match.end()] + '\n' + podcast_link_md + '\n\n' + x_thread[price_match.end():]
+    else:
+        # Insert after date line
+        date_match = re.search(r'(\*\*Date:\*\*[^\n]+\n)', x_thread)
+        if date_match:
+            x_thread = x_thread[:date_match.end()] + '\n' + podcast_link_md + '\n\n' + x_thread[date_match.end():]
+        else:
+            # Insert at the beginning after header
+            header_match = re.search(r'(# Tesla Shorts Time[^\n]+\n)', x_thread)
+            if header_match:
+                x_thread = x_thread[:header_match.end()] + '\n' + podcast_link_md + '\n\n' + x_thread[header_match.end():]
+
+# Fix X post URLs - remove markdown brackets
+x_thread = re.sub(r'\[([^\]]+)\]\((https?://[^\)]+)\)', r'\2', x_thread)
+x_thread = re.sub(r'\[(https?://[^\]]+)\]', r'\1', x_thread)
+# Fix URLs with trailing brackets
+x_thread = re.sub(r'(https?://x\.com/[^\s\)\]]+)[\)\]]+', r'\1', x_thread)
+
 # Find and limit news items to exactly 10
 news_pattern = r'(### Top 10 News Items.*?)(### Top X Posts|## Short Spot|━━)'
 news_match = re.search(news_pattern, x_thread, re.DOTALL | re.IGNORECASE)
@@ -1212,8 +1243,12 @@ def format_digest_for_x(digest: str) -> str:
     
     # Check if the full URL is present (not just the text)
     # Also check for incomplete podcast links (has emoji but no URL)
+    # More aggressive check - look for any line with podcast emoji that doesn't have the full URL
     has_incomplete_podcast_link = bool(re.search(r'🎙️[^\n]*[Pp]odcast[^\n]*(?!https://)', formatted))
-    if podcast_url not in formatted or has_incomplete_podcast_link:
+    # Also check if podcast link line exists but URL is missing
+    podcast_line_without_url = bool(re.search(r'🎙️[^\n]*[Pp]odcast[^\n]*\n(?!.*https://podcasts\.apple\.com)', formatted, re.DOTALL))
+    
+    if podcast_url not in formatted or has_incomplete_podcast_link or podcast_line_without_url:
         # Remove any incomplete podcast link text
         lines = formatted.split('\n')
         cleaned_lines = []
@@ -1372,6 +1407,13 @@ def format_digest_for_x(digest: str) -> str:
         last_text = ' '.join(last_lines).strip()
         if not any(word in last_text.lower() for word in ['feedback', 'dm', 'accelerating', 'electric', 'mission']):
             formatted += '\n\n⚡ Keep accelerating!'
+    
+    # Fix X post URLs - remove markdown brackets and ensure plain text URLs
+    # Replace [text](url) or [url] with just the URL
+    formatted = re.sub(r'\[([^\]]+)\]\((https?://[^\)]+)\)', r'\2', formatted)
+    formatted = re.sub(r'\[(https?://[^\]]+)\]', r'\1', formatted)
+    # Fix URLs that might have trailing brackets or parentheses
+    formatted = re.sub(r'(https?://x\.com/[^\s\)\]]+)[\)\]]+', r'\1', formatted)
     
     # Final cleanup: normalize whitespace
     # Replace multiple spaces with single space (but preserve intentional formatting)
