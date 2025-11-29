@@ -411,7 +411,7 @@ def fetch_tesla_news():
     before_dedup = len(all_articles)
     formatted_articles = remove_similar_items(
         all_articles,
-        similarity_threshold=0.75,  # 75% similarity = likely duplicate
+        similarity_threshold=0.85,  # 85% similarity = likely duplicate
         get_text_func=lambda x: f"{x.get('title', '')} {x.get('description', '')}"
     )
     after_dedup = len(formatted_articles)
@@ -432,10 +432,52 @@ tesla_news, raw_news_articles = fetch_tesla_news()
 top_x_posts = []
 raw_x_posts = []
 
+# Focused on top high-engagement accounts optimized to fit within 512 character query limit
+# Query uses 472 chars, leaving 40 chars buffer (18 accounts total)
 TRUSTED_USERNAMES = [
-    "elonmusk", "Tesla", "Tesla_AI", "cybertruck", "TeslaCharging", "teslaenergy",
-    "OptimusTesla", "GigaTexas", "GigaBerlin", "SawyerMerritt"
+    # Highest Engagement Accounts
+    "elonmusk",  # Highest engagement, Tesla CEO
+    
+    # Official Tesla Accounts (High Engagement)
+    "Tesla", "Tesla_AI", "TeslaCharging", "cybertruck", "teslaenergy",
+    "GigaTexas", "GigaBerlin",  # Factory accounts with high engagement
+    
+    # Top Tesla Influencers (High Engagement)
+    "SawyerMerritt", "WholeMarsBlog", "TeslaRaj",
+    
+    # Tesla Analysts & Investors (High Engagement)
+    "GaryBlack00", "TroyTeslike", "RossGerber",
+    
+    # Top Tesla Media Outlets (High Engagement)
+    "Teslarati", "ElectrekCo", "InsideEVs", "CleanTechnica",
 ]
+
+# Tesla-related keywords for content filtering (case-insensitive)
+TESLA_CONTENT_KEYWORDS = [
+    "tesla", "tsla", "model 3", "model y", "model s", "model x", "cybertruck",
+    "roadster", "semi", "robotaxi", "optimus", "fsd", "full self-driving",
+    "autopilot", "supercharger", "giga", "gigafactory", "gigatexas", "gigaberlin",
+    "gigashanghai", "4680", "lfp", "hw4", "hw5", "ai5", "tesla energy",
+    "powerwall", "megapack", "solar roof", "tesla charging"
+]
+
+
+def is_tesla_related(text: str) -> bool:
+    """
+    Check if post text contains Tesla-related keywords.
+    Returns True if the post is about Tesla, False otherwise.
+    """
+    if not text:
+        return False
+    
+    text_lower = text.lower()
+    
+    # Check if any Tesla keyword appears in the text
+    for keyword in TESLA_CONTENT_KEYWORDS:
+        if keyword.lower() in text_lower:
+            return True
+    
+    return False
 
 def fetch_x_posts_nitter(usernames: List[str]) -> tuple[List[Dict], List[Dict]]:
     """Fetch X posts using Nitter scraping (Free fallback)."""
@@ -498,13 +540,12 @@ def fetch_x_posts_nitter(usernames: List[str]) -> tuple[List[Dict], List[Dict]]:
 
 def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
     """
-    100% free, maximum variety & quality.
-    Captures:
-    - All official Tesla product/regional accounts
-    - Elon + Sawyer's reposts & quote tweets (intelligently)
-    - Only high-signal community voices
+    Fetch Tesla-related posts from trusted X accounts using the X API.
+    Only includes posts that are actually about Tesla (content-filtered).
+    Prioritizes original posts (excludes retweets).
+    Returns: (top_posts, raw_posts) tuple
     """
-    logging.info("Fetching Tesla posts from 30+ official + trusted accounts (incl. reposts/quotes)")
+    logging.info("Fetching Tesla posts from trusted accounts (Tesla content only, original posts, retweets excluded)...")
 
     end_time = datetime.datetime.now(datetime.timezone.utc)
     start_time = end_time - datetime.timedelta(hours=48)  # 48h = never miss weekend news
@@ -512,14 +553,24 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
     all_posts = []
     raw_posts = []
 
-    # 1. Original posts from trusted accounts - FILTER FOR TESLA-RELATED CONTENT
-    # Add Tesla-related keywords to ensure we only get Tesla content
-    tesla_keywords = "(Tesla OR TSLA OR Model OR Cybertruck OR FSD OR \"Full Self-Driving\" OR Supercharger OR Giga OR Optimus OR Robotaxi OR 4680 OR LFP OR HW4 OR HW5 OR AI5)"
-    from_part = " OR ".join([f"from:{u}" for u in TRUSTED_USERNAMES if u.isalnum()])
-    repost_part = "retweets_of:elonmusk OR retweets_of:SawyerMerritt"
-    # Filter for Tesla-related content from trusted accounts
-    # Note: X API requires keywords to be in the query, so we combine account filters with Tesla keywords
-    query = f"({from_part}) ({tesla_keywords}) OR ({repost_part}) ({tesla_keywords}) -is:reply lang:en"
+    # Build query for Tesla-related content
+    # Shortened keywords to stay under 512 char limit
+    tesla_keywords = "(Tesla OR TSLA OR Model OR Cybertruck OR FSD OR Supercharger OR Giga OR Optimus OR Robotaxi OR 4680)"
+    # X usernames can contain letters, numbers, and underscores - filter to allow those
+    from_part = " OR ".join([f"from:{u}" for u in TRUSTED_USERNAMES if all(c.isalnum() or c == '_' for c in u)])
+    # Prioritize original posts, exclude retweets
+    # Simplified query - keywords only applied once to reduce length
+    query = f"{from_part} ({tesla_keywords}) -is:reply -is:retweet lang:en"
+    
+    # Validate query length (X API limit is 512 chars)
+    if len(query) > 512:
+        logging.warning(f"Query too long ({len(query)} chars), using simplified version...")
+        # Fallback: Use only top priority accounts
+        priority_accounts = ["elonmusk", "Tesla", "Tesla_AI", "SawyerMerritt"]
+        from_part = " OR ".join([f"from:{u}" for u in priority_accounts])
+        query = f"{from_part} ({tesla_keywords}) -is:reply -is:retweet lang:en"
+    
+    logging.info(f"Query length: {len(query)} characters (limit: 512)")
 
     try:
         import tweepy
@@ -531,8 +582,10 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
         )
         
         logging.info(f"Searching X with query: {query[:100]}...")
+        logging.info(f"Time range: {start_time} to {end_time}")
         
-        # Fetch tweets
+        # Fetch tweets - try to get more results with pagination if needed
+        all_tweets = []
         response = x_client.search_recent_tweets(
             query=query,
             max_results=100,  # Max allowed per request
@@ -542,14 +595,76 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
             expansions=['author_id', 'referenced_tweets.id']
         )
         
-        if not response.data:
+        if response.data:
+            all_tweets.extend(response.data)
+            logging.info(f"First batch: {len(response.data)} tweets")
+        
+        # Try to get more results if we have a next_token (pagination)
+        if hasattr(response, 'meta') and response.meta and 'next_token' in response.meta:
+            try:
+                next_response = x_client.search_recent_tweets(
+                    query=query,
+                    max_results=100,
+                    start_time=start_time,
+                    next_token=response.meta['next_token'],
+                    tweet_fields=['created_at', 'public_metrics', 'author_id', 'text', 'referenced_tweets'],
+                    user_fields=['username', 'name'],
+                    expansions=['author_id', 'referenced_tweets.id']
+                )
+                if next_response.data:
+                    all_tweets.extend(next_response.data)
+                    logging.info(f"Second batch: {len(next_response.data)} tweets")
+            except Exception as e:
+                logging.debug(f"Could not fetch second page: {e}")
+        
+        # Use combined tweets
+        tweets_to_process = all_tweets if all_tweets else (response.data if response.data else [])
+        
+        if not tweets_to_process:
             logging.warning("No tweets found matching criteria.")
             return [], []
             
-        # Create user lookup map
+        # Create user lookup map (from first response, should have all users)
         users = {u.id: u for u in response.includes['users']} if response.includes and 'users' in response.includes else {}
         
-        for post in response.data:
+        logging.info(f"Found {len(tweets_to_process)} tweets from API, processing and filtering for Tesla content...")
+        
+        filtered_count = 0
+        retweet_count = 0
+        total_processed = 0
+        
+        for post in tweets_to_process:
+            total_processed += 1
+            
+            # Check if this is a retweet (should be filtered by query, but double-check)
+            # In tweepy, referenced_tweets is a list of ReferencedTweet objects
+            refs = post.referenced_tweets or []
+            is_retweet = any(getattr(ref, 'type', None) == 'retweeted' for ref in refs)
+            
+            # Skip retweets (prioritize original posts)
+            # Note: Quote tweets are allowed (they're original content with a reference)
+            if is_retweet:
+                retweet_count += 1
+                logging.debug(f"Skipping retweet: {post.id}")
+                continue
+            
+            # Filter: Only include posts that are actually about Tesla
+            # For official Tesla accounts, be slightly more lenient (they're likely Tesla-related)
+            author_data = users.get(post.author_id) if post.author_id else None
+            author_username = author_data.username if author_data else "unknown"
+            author_lower = author_username.lower() if author_username else ""
+            
+            # Official Tesla accounts are more likely to be Tesla-related even without explicit keywords
+            is_official_account = author_lower in ["tesla", "tesla_ai", "cybertruck", "teslacharging", "teslaenergy", "optimustesla", "gigatexas", "gigaberlin"]
+            
+            if not is_tesla_related(post.text):
+                # For official accounts, be more lenient - include if it's from a Tesla account
+                if not is_official_account:
+                    filtered_count += 1
+                    logging.debug(f"Skipping non-Tesla post from @{author_username}: {post.text[:50]}...")
+                    continue
+                else:
+                    logging.debug(f"Including post from official Tesla account @{author_username} (lenient filtering)")
             metrics = post.public_metrics or {}
             engagement = (
                 metrics.get('like_count', 0) * 1.0 +
@@ -564,11 +679,14 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
             hours_old = (end_time - created_at).total_seconds() / 3600
             recency = 2.5 if hours_old <= 8 else (1.8 if hours_old <= 24 else 1.0)
 
-            # Get author info from includes
-            author_id = post.author_id
-            author_data = users.get(author_id)
-            author_username = author_data.username if author_data else "unknown"
-            author_name = author_data.name if author_data else "Unknown"
+            # Get author info from includes (already extracted above, but ensure we have it)
+            if not author_data:
+                author_id = post.author_id
+                author_data = users.get(author_id)
+                author_username = author_data.username if author_data else "unknown"
+                author_name = author_data.name if author_data else "Unknown"
+            else:
+                author_name = author_data.name if author_data else "Unknown"
             
             author_lower = author_username.lower()
             
@@ -576,22 +694,11 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
                     3.0 if author_lower in ["tesla", "tesla_ai", "cybertruck", "optimustelsa"] else \
                     2.5 if author_lower == "sawyermerritt" else 1.5
 
-            # Bonus if it's a repost/quote from Elon or Sawyer
-            # referenced_tweets is a list of objects in tweepy
-            refs = post.referenced_tweets or []
-            is_signal_repost = False
-            # We can't easily check the author of referenced tweets without more complex lookups
-            # For now, check if the query targeted reposts implies it
-            
-            # Simple check if it's a retweet (though we filtered out retweets in query? No, we kept them for specific accounts maybe? 
-            # The query has "retweets_of:..." but usually search_recent_tweets excludes retweets by default or we treat them as tweets.
-            # Actually, standard search includes retweets unless -is:retweet.
-            # The query has "-is:reply" but NOT "-is:retweet".
-            
-            if is_signal_repost:
-                boost *= 1.8
+            # Boost original posts (non-retweets get additional priority)
+            # Since we're filtering retweets, all posts here are original
+            original_post_boost = 1.5  # Give original posts a boost
 
-            score = engagement * recency * boost
+            score = engagement * recency * boost * original_post_boost
 
             all_posts.append({
                 "id": str(post.id),
@@ -603,12 +710,25 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
                 "likes": metrics.get('like_count', 0),
                 "retweets": metrics.get('retweet_count', 0),
                 "replies": metrics.get('reply_count', 0),
-                "final_score": score,
-                "is_elon_or_sawyer_repost": is_signal_repost,
+                "quotes": metrics.get('quote_count', 0),
+                "final_score": round(score, 2),
+                "is_retweet": False,  # All posts here are original (retweets filtered)
                 "hours_old": round(hours_old, 1)
             })
 
-        logging.info(f"Fetched & scored {len(all_posts)} posts from Tesla ecosystem")
+        logging.info(f"Processing summary:")
+        logging.info(f"  - Total tweets from API: {total_processed}")
+        logging.info(f"  - Retweets filtered out: {retweet_count}")
+        logging.info(f"  - Non-Tesla content filtered out: {filtered_count}")
+        logging.info(f"  - Tesla-related posts kept: {len(all_posts)}")
+        
+        if len(all_posts) < 10:
+            logging.warning(f"⚠️  Only {len(all_posts)} posts found. Possible reasons:")
+            logging.warning(f"    1. Limited Tesla content in the last 48 hours from these accounts")
+            logging.warning(f"    2. Many posts might be retweets (excluded)")
+            logging.warning(f"    3. Posts might not contain explicit Tesla keywords")
+            logging.warning(f"    4. Query might be too restrictive")
+            logging.warning(f"    Consider: Expanding time window, relaxing filters, or checking account activity")
 
     except Exception as e:
         logging.warning(f"Search failed: {e}")
@@ -629,17 +749,40 @@ def fetch_top_x_posts_from_trusted_accounts() -> tuple[List[Dict], List[Dict]]:
             if post['id'] not in existing_ids:
                 all_posts.append(post)
                 
-    # Sort + dedupe
+    # Sort by score
     all_posts.sort(key=lambda x: x['final_score'], reverse=True)
+    
+    # Remove duplicates by ID
     seen = set()
     unique = [p for p in all_posts if p['id'] not in seen and (seen.add(p['id']) or True)]
 
-    top_25 = unique[:25]
+    # Limit to max 4 posts per username (special case: TeslaCharging max 1)
+    MAX_POSTS_PER_USERNAME = 4
+    MAX_POSTS_TESLACHARGING = 1
+    username_counts = {}
+    limited_posts = []
+    
+    for post in unique:
+        username = post['username'].lower()
+        count = username_counts.get(username, 0)
+        
+        # Special limit for TeslaCharging
+        if username == "teslacharging":
+            max_posts = MAX_POSTS_TESLACHARGING
+        else:
+            max_posts = MAX_POSTS_PER_USERNAME
+        
+        if count < max_posts:
+            limited_posts.append(post)
+            username_counts[username] = count + 1
+        else:
+            logging.debug(f"Skipping post from @{post['username']} (already have {max_posts} posts from this account)")
+
+    top_25 = limited_posts[:25]
     # Populate raw_posts with all fetched posts (before filtering to top 25)
     raw_posts = all_posts.copy()
 
-    logging.info(f"Returning {len(top_25)} best Tesla posts "
-                 f"(Elon/Sawyer reposts: {sum(1 for p in top_25 if p['is_elon_or_sawyer_repost'])})")
+    logging.info(f"Returning {len(top_25)} best Tesla posts (from {len(raw_posts)} total, max {MAX_POSTS_PER_USERNAME} per username, max {MAX_POSTS_TESLACHARGING} for TeslaCharging)")
 
     return top_25, raw_posts
 
@@ -1012,7 +1155,7 @@ X_PROMPT = f"""
 # Tesla Shorts Time - DAILY EDITION
 **Date:** {today_str}
 **REAL-TIME TSLA price:** ${price:.2f} {change_str}
-
+🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939
 {news_section}
 
 {x_posts_section}
@@ -1029,7 +1172,6 @@ You are an elite Tesla news curator producing the daily "Tesla Shorts Time" news
 # Tesla Shorts Time
 **Date:** {today_str}
 **REAL-TIME TSLA price:** ${price:.2f} {change_str}
-🎙️ Tesla Shorts Time Daily Podcast Link: https://podcasts.apple.com/us/podcast/tesla-shorts-time/id1855142939
 
 ━━━━━━━━━━━━━━━━━━━━
 ### Top 10 News Items
@@ -1558,12 +1700,12 @@ RULES:
 
 SCRIPT STRUCTURE:
 [Intro music - 10 seconds]
-Patrick: Welcome to Tesla Shorts Time Daily, episode {episode_num}. It is {today_str}. I'm Patrick in Vancouver, Canada. TSLA stock price is ${price:.2f} right now{' in after-hours trading' if info.get("marketState") == "POST" else ''}. Thank you for joining us today. If you like the show, please like, share, rate and subscribe to the podcast, it really helps. Now straight to the daily news updates you are here for.
+Patrick: Welcome to Tesla Shorts Time Daily, episode {episode_num}. It is {today_str}. I'm Patrick in Vancouver, Canada. TSLA stock price is ${price:.2f} dollars right now{' in after-hours trading' if info.get("marketState") == "POST" else ''}. Thank you for joining us today. If you like the show, please like, share, rate and subscribe to the podcast, it really helps. Now straight to the daily news updates you are here for.
 
 [Narrate EVERY item from the digest in order - no skipping]
-- For each news item: Read the title with excitement, then paraphrase the summary naturally
-- For each X post: Read the title with maximum hype, then paraphrase the post in excited speech
-- Short Squeeze: Paraphrase with glee, calling out specific failed predictions and dollar losses
+- For each news item: Read the title with enthusiasm, then paraphrase the summary naturally
+- For each X post: Read the title with enthusiasm, then paraphrase the post in excited speech
+- Short Squeeze: Paraphrase with enthusiasm, calling out specific failed predictions and dollar losses
 - Daily Challenge + Quote: Read the quote verbatim, then the challenge verbatim, add one encouraging sentence
 
 [Closing]
